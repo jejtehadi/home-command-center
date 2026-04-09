@@ -26,7 +26,7 @@ st.markdown("""
     .stApp { background-color: #1e1e32; color: #e0e0e0; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    [data-testid="stToolbar"] {display: none;}
+    
 
     /* Force all Streamlit text white */
     .stApp p, .stApp span, .stApp label, .stApp div,
