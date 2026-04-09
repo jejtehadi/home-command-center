@@ -1,0 +1,626 @@
+"""
+🏠 Home Command Center — Household Chore & Task Tracker
+A Skylight-inspired local web app for managing household chores and tasks.
+"""
+
+import streamlit as st
+from datetime import date, timedelta, datetime, time
+import database as db
+
+# ---------------------------------------------------------------------------
+# Page config
+# ---------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Home Command Center",
+    page_icon="🏠",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ---------------------------------------------------------------------------
+# Dark/Gray Theme CSS
+# ---------------------------------------------------------------------------
+st.markdown("""
+<style>
+    /* ---- Base dark theme ---- */
+    .stApp { background-color: #1a1a2e; color: #e0e0e0; }
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Force all Streamlit text white */
+    .stApp p, .stApp span, .stApp label, .stApp div,
+    .stApp .stMarkdown, .stApp h1, .stApp h2, .stApp h3, .stApp h4 {
+        color: #e0e0e0 !important;
+    }
+
+    /* Sidebar */
+    [data-testid="stSidebar"] { background-color: #16213e; }
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] label, [data-testid="stSidebar"] div,
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h4 {
+        color: #cbd5e1 !important;
+    }
+    [data-testid="stSidebar"] .stMarkdown hr { border-color: #334155; }
+
+    /* Expander styling */
+    [data-testid="stExpander"] { border-color: #334155 !important; }
+    [data-testid="stExpander"] summary span { color: #cbd5e1 !important; }
+
+    /* Input fields */
+    .stTextInput input, .stSelectbox select, .stDateInput input {
+        background-color: #1e293b !important; color: #e0e0e0 !important;
+        border-color: #475569 !important;
+    }
+    [data-testid="stDateInput"] input { background-color: #1e293b !important; color: #e0e0e0 !important; }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] { background-color: #16213e; border-radius: 8px; padding: 0.25rem; gap: 0; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent; color: #94a3b8 !important;
+        border-radius: 6px; padding: 0.5rem 1.5rem; font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #0f3460 !important; color: #ffffff !important;
+    }
+    .stTabs [data-baseweb="tab-highlight"] { background-color: transparent !important; }
+    .stTabs [data-baseweb="tab-border"] { display: none; }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px; background-color: #1e293b; color: #e0e0e0;
+        border: 1px solid #475569;
+    }
+    .stButton > button:hover { background-color: #334155; border-color: #64748b; }
+    .stButton > button[kind="primary"] {
+        background-color: #0f3460; color: white; border: 1px solid #1a5276;
+    }
+    .stButton > button[kind="primary"]:hover { background-color: #1a5276; }
+
+    /* Info boxes */
+    [data-testid="stAlert"] { background-color: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+
+    /* ---- Top banner ---- */
+    .top-banner {
+        background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+        color: #f1f5f9; padding: 1.2rem 2rem; border-radius: 12px; margin-bottom: 1rem;
+        display: flex; justify-content: space-between; align-items: center;
+        border: 1px solid #1a5276;
+    }
+    .top-banner h1 { margin: 0; font-size: 1.8rem; font-weight: 700; color: #f1f5f9 !important; }
+    .top-banner .date-display { font-size: 1.1rem; color: #94a3b8 !important; }
+
+    /* ---- Day column headers ---- */
+    .day-header {
+        text-align: center; padding: 0.6rem 0.3rem; border-radius: 10px;
+        margin-bottom: 0.5rem; font-weight: 600;
+    }
+    .day-header.today {
+        background: linear-gradient(135deg, #0f3460, #1a5276);
+        color: #ffffff; border: 1px solid #2980b9;
+    }
+    .day-header.other { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+    .day-header .day-name {
+        font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;
+        color: inherit !important;
+    }
+    .day-header .day-num { font-size: 1.4rem; font-weight: 700; color: inherit !important; }
+
+    /* ---- Task cards ---- */
+    .task-card {
+        border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
+        border-left: 4px solid; background: #1e293b;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3); font-size: 0.85rem;
+        transition: transform 0.1s; cursor: pointer;
+    }
+    .task-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+    .task-card.completed { opacity: 0.45; text-decoration: line-through; }
+    .task-card .task-title { font-weight: 600; margin-bottom: 0.2rem; color: #f1f5f9 !important; }
+    .task-card .task-meta {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 0.75rem; color: #94a3b8 !important;
+    }
+    .task-card .person-badge {
+        display: inline-flex; align-items: center; gap: 0.25rem;
+        padding: 0.1rem 0.4rem; border-radius: 12px; font-size: 0.7rem; font-weight: 500;
+    }
+    .priority-high { border-right: 3px solid #ef4444; }
+    .priority-low { border-right: 3px solid #64748b; }
+
+    /* ---- Stat cards ---- */
+    .stat-card {
+        background: #1e293b; border-radius: 12px; padding: 1rem; text-align: center;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 1px solid #334155;
+    }
+    .stat-card .stat-number { font-size: 2rem; font-weight: 700; color: #38bdf8 !important; }
+    .stat-card .stat-label { font-size: 0.85rem; color: #94a3b8 !important; }
+
+    /* ---- Progress bars ---- */
+    .progress-container {
+        background: #334155; border-radius: 999px; height: 10px; overflow: hidden; margin: 0.5rem 0;
+    }
+    .progress-fill {
+        height: 100%; border-radius: 999px;
+        background: linear-gradient(90deg, #0ea5e9, #38bdf8); transition: width 0.3s;
+    }
+
+    /* ---- Chips & tags ---- */
+    .person-chip {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.85rem;
+        font-weight: 500; margin: 0.2rem; color: white !important;
+    }
+    .cat-tag {
+        display: inline-flex; align-items: center; gap: 0.2rem;
+        padding: 0.15rem 0.5rem; border-radius: 8px; font-size: 0.7rem; font-weight: 500;
+    }
+
+    /* ---- Misc ---- */
+    .empty-day { color: #64748b !important; font-style: italic; font-size: 0.8rem; padding: 1rem 0; text-align: center; }
+    .recurrence-badge {
+        font-size: 0.65rem; background: #1e3a5f; color: #7dd3fc !important;
+        padding: 0.1rem 0.35rem; border-radius: 4px;
+    }
+    .stCheckbox label span { color: #cbd5e1 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Session state
+# ---------------------------------------------------------------------------
+if "current_week_start" not in st.session_state:
+    today = date.today()
+    st.session_state.current_week_start = today - timedelta(days=today.weekday())
+
+if "show_add_task" not in st.session_state:
+    st.session_state.show_add_task = False
+
+if "selected_date" not in st.session_state:
+    st.session_state.selected_date = date.today()
+
+# ---------------------------------------------------------------------------
+# Data helpers
+# ---------------------------------------------------------------------------
+@st.cache_data(ttl=2)
+def load_people():
+    return db.get_people()
+
+@st.cache_data(ttl=2)
+def load_categories():
+    return db.get_categories()
+
+def load_week_tasks(start_date):
+    return db.get_tasks_for_week(start_date)
+
+# ---------------------------------------------------------------------------
+# TOP BANNER
+# ---------------------------------------------------------------------------
+today = date.today()
+st.markdown(f"""
+<div class="top-banner">
+    <div><h1>🏠 Home Command Center</h1></div>
+    <div class="date-display">📅 {today.strftime('%A, %B %d, %Y')}</div>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# SIDEBAR
+# ---------------------------------------------------------------------------
+with st.sidebar:
+    st.markdown("## ⚙️ Settings")
+
+    with st.expander("👥 Household Members", expanded=False):
+        people = load_people()
+        for p in people:
+            cols = st.columns([1, 3, 1])
+            with cols[0]:
+                st.write(p['avatar'])
+            with cols[1]:
+                st.markdown(f"<span class='person-chip' style='background:{p['color']}'>{p['name']}</span>",
+                           unsafe_allow_html=True)
+            with cols[2]:
+                if st.button("🗑️", key=f"del_person_{p['id']}", help=f"Remove {p['name']}"):
+                    db.delete_person(p['id'])
+                    st.cache_data.clear()
+                    st.rerun()
+
+        st.markdown("---")
+        st.markdown("**Add Member**")
+        new_name = st.text_input("Name", key="new_person_name", placeholder="e.g. Alex")
+        new_color = st.color_picker("Color", value="#4A90D9", key="new_person_color")
+        new_avatar = st.selectbox("Avatar", ["👨", "👩", "👦", "👧", "🧑", "👴", "👵"],
+                                  key="new_person_avatar")
+        if st.button("➕ Add Member", key="add_person_btn"):
+            if new_name:
+                db.add_person(new_name.strip(), new_color, new_avatar)
+                st.cache_data.clear()
+                st.rerun()
+
+    with st.expander("🏷️ Categories", expanded=False):
+        categories = load_categories()
+        for c in categories:
+            cols = st.columns([1, 3, 1])
+            with cols[0]:
+                st.write(c['icon'])
+            with cols[1]:
+                st.markdown(f"<span class='cat-tag' style='background:{c['color']}30; color:{c['color']}'>{c['name']}</span>",
+                           unsafe_allow_html=True)
+            with cols[2]:
+                if st.button("🗑️", key=f"del_cat_{c['id']}", help=f"Remove {c['name']}"):
+                    db.delete_category(c['id'])
+                    st.cache_data.clear()
+                    st.rerun()
+
+        st.markdown("---")
+        st.markdown("**Add Category**")
+        cat_name = st.text_input("Name", key="new_cat_name", placeholder="e.g. Cooking")
+        cat_color = st.color_picker("Color", value="#6B7280", key="new_cat_color")
+        cat_icon = st.text_input("Icon (emoji)", value="📋", key="new_cat_icon")
+        if st.button("➕ Add Category", key="add_cat_btn"):
+            if cat_name:
+                db.add_category(cat_name.strip(), cat_color, cat_icon)
+                st.cache_data.clear()
+                st.rerun()
+
+    st.markdown("---")
+
+    # Weekly Stats
+    st.markdown("## 📊 This Week")
+    week_start = st.session_state.current_week_start
+    week_end = week_start + timedelta(days=6)
+    stats = db.get_stats(week_start, week_end)
+
+    if stats['total'] > 0:
+        pct = int(stats['completed'] / stats['total'] * 100)
+        st.markdown(f"""
+        <div class="stat-card">
+            <div class="stat-number">{stats['completed']}/{stats['total']}</div>
+            <div class="stat-label">Tasks Completed</div>
+            <div class="progress-container">
+                <div class="progress-fill" style="width: {pct}%"></div>
+            </div>
+            <div class="stat-label">{pct}% done</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if stats['by_person']:
+            st.markdown("#### By Person")
+            for bp in stats['by_person']:
+                p_pct = int(bp['done'] / bp['total'] * 100) if bp['total'] > 0 else 0
+                st.markdown(f"""
+                <div style="margin: 0.3rem 0;">
+                    <span style="color:#cbd5e1 !important;">{bp['avatar']} {bp['name']}: {bp['done']}/{bp['total']}</span>
+                    <div class="progress-container">
+                        <div class="progress-fill" style="width: {p_pct}%; background: {bp['color']}"></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No tasks this week yet!")
+
+# ---------------------------------------------------------------------------
+# TABS
+# ---------------------------------------------------------------------------
+tab_calendar, tab_balance = st.tabs(["📅 Weekly Calendar", "⚖️ Balance Board"])
+
+# ===========================================================================
+# TAB 1: WEEKLY CALENDAR
+# ===========================================================================
+with tab_calendar:
+    # Week navigation
+    nav_cols = st.columns([1, 1, 3, 1, 1])
+    with nav_cols[0]:
+        if st.button("⬅️ Prev", use_container_width=True):
+            st.session_state.current_week_start -= timedelta(weeks=1)
+            st.rerun()
+    with nav_cols[1]:
+        if st.button("📍 Today", use_container_width=True):
+            st.session_state.current_week_start = today - timedelta(days=today.weekday())
+            st.rerun()
+    with nav_cols[2]:
+        ws = st.session_state.current_week_start
+        we = ws + timedelta(days=6)
+        st.markdown(
+            f"<div style='text-align:center; font-size:1.2rem; font-weight:600; padding-top:0.3rem; color:#f1f5f9 !important;'>"
+            f"{ws.strftime('%b %d')} — {we.strftime('%b %d, %Y')}</div>",
+            unsafe_allow_html=True
+        )
+    with nav_cols[3]:
+        if st.button("Next ➡️", use_container_width=True):
+            st.session_state.current_week_start += timedelta(weeks=1)
+            st.rerun()
+    with nav_cols[4]:
+        if st.button("➕ Add Task", use_container_width=True, type="primary"):
+            st.session_state.show_add_task = not st.session_state.show_add_task
+            st.rerun()
+
+    # Add task form
+    if st.session_state.show_add_task:
+        with st.container():
+            st.markdown("### ✏️ New Task")
+            people = load_people()
+            categories = load_categories()
+
+            form_cols = st.columns([2, 1, 1, 1])
+            with form_cols[0]:
+                task_title = st.text_input("What needs to be done?", placeholder="e.g. Vacuum living room")
+            with form_cols[1]:
+                task_date = st.date_input("Due Date", value=today)
+            with form_cols[2]:
+                use_time = st.checkbox("Set time?", value=False)
+                task_time = None
+                if use_time:
+                    task_time = st.time_input("Time", value=time(9, 0))
+            with form_cols[3]:
+                priority = st.selectbox("Priority", ["low", "medium", "high"], index=1)
+
+            form_cols2 = st.columns([1, 1, 1, 1])
+            with form_cols2[0]:
+                person_options = {p['id']: f"{p['avatar']} {p['name']}" for p in people}
+                person_options[None] = "👤 Unassigned"
+                assigned = st.selectbox("Assign to", options=list(person_options.keys()),
+                                         format_func=lambda x: person_options[x])
+            with form_cols2[1]:
+                cat_options = {c['id']: f"{c['icon']} {c['name']}" for c in categories}
+                cat_options[None] = "📋 No Category"
+                category = st.selectbox("Category", options=list(cat_options.keys()),
+                                         format_func=lambda x: cat_options[x])
+            with form_cols2[2]:
+                recurrence = st.selectbox("Repeat", [None, "daily", "weekly", "biweekly", "monthly"],
+                                           format_func=lambda x: {
+                                               None: "🔂 No repeat",
+                                               "daily": "📆 Daily",
+                                               "weekly": "🗓️ Weekly",
+                                               "biweekly": "📅 Every 2 weeks",
+                                               "monthly": "📅 Monthly"
+                                           }.get(x, x))
+            with form_cols2[3]:
+                description = st.text_input("Notes (optional)", placeholder="Any extra details...")
+
+            col_save, col_cancel, _ = st.columns([1, 1, 4])
+            with col_save:
+                if st.button("💾 Save Task", type="primary", use_container_width=True):
+                    if task_title:
+                        time_str = task_time.strftime("%H:%M") if task_time else None
+                        db.add_task(
+                            title=task_title.strip(),
+                            due_date=task_date.isoformat(),
+                            category_id=category,
+                            assigned_to=assigned,
+                            due_time=time_str,
+                            description=description,
+                            recurrence=recurrence,
+                            priority=priority,
+                        )
+                        st.session_state.show_add_task = False
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.warning("Please enter a task title!")
+            with col_cancel:
+                if st.button("❌ Cancel", use_container_width=True):
+                    st.session_state.show_add_task = False
+                    st.rerun()
+
+            st.markdown("---")
+
+    # Weekly calendar grid
+    week_start = st.session_state.current_week_start
+    tasks = load_week_tasks(week_start)
+
+    tasks_by_date = {}
+    for i in range(7):
+        d = week_start + timedelta(days=i)
+        tasks_by_date[d] = []
+
+    for t in tasks:
+        d = date.fromisoformat(t['due_date'])
+        if d in tasks_by_date:
+            tasks_by_date[d].append(t)
+
+    day_cols = st.columns(7)
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    for i, col in enumerate(day_cols):
+        d = week_start + timedelta(days=i)
+        is_today = d == today
+        day_class = "today" if is_today else "other"
+
+        with col:
+            st.markdown(f"""
+            <div class="day-header {day_class}">
+                <div class="day-name">{day_names[i]}</div>
+                <div class="day-num">{d.day}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            day_tasks = tasks_by_date.get(d, [])
+
+            if not day_tasks:
+                st.markdown('<div class="empty-day">No tasks</div>', unsafe_allow_html=True)
+            else:
+                for t in day_tasks:
+                    completed_class = "completed" if t['is_completed'] else ""
+                    priority_class = f"priority-{t['priority']}"
+                    border_color = t.get('category_color') or t.get('person_color') or '#475569'
+
+                    person_html = ""
+                    if t.get('person_name'):
+                        person_html = (
+                            f"<span class='person-badge' style='background:{t['person_color']}25; "
+                            f"color:{t['person_color']} !important'>{t['person_avatar']} {t['person_name']}</span>"
+                        )
+
+                    cat_html = ""
+                    if t.get('category_name'):
+                        cat_html = (
+                            f"<span class='cat-tag' style='background:{t['category_color']}25; "
+                            f"color:{t['category_color']} !important'>{t['category_icon']} {t['category_name']}</span>"
+                        )
+
+                    time_html = ""
+                    if t.get('due_time'):
+                        try:
+                            t_obj = datetime.strptime(t['due_time'], "%H:%M")
+                            time_html = f"<span style='color:#94a3b8 !important'>🕐 {t_obj.strftime('%I:%M %p')}</span>"
+                        except ValueError:
+                            time_html = f"<span style='color:#94a3b8 !important'>🕐 {t['due_time']}</span>"
+
+                    rec_html = ""
+                    if t.get('recurrence'):
+                        rec_labels = {'daily': '🔄 Daily', 'weekly': '🔄 Weekly',
+                                      'biweekly': '🔄 Bi-weekly', 'monthly': '🔄 Monthly'}
+                        rec_html = f"<span class='recurrence-badge'>{rec_labels.get(t['recurrence'], '')}</span>"
+
+                    st.markdown(f"""
+                    <div class="task-card {completed_class} {priority_class}"
+                         style="border-left-color: {border_color};">
+                        <div class="task-title">{t['title']}</div>
+                        <div class="task-meta">
+                            {person_html} {cat_html}
+                        </div>
+                        <div class="task-meta" style="margin-top:0.2rem;">
+                            {time_html} {rec_html}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    btn_label = "✅" if not t['is_completed'] else "↩️"
+                    btn_help = "Mark complete" if not t['is_completed'] else "Mark incomplete"
+                    bcol1, bcol2 = st.columns(2)
+                    with bcol1:
+                        if st.button(btn_label, key=f"toggle_{t['id']}", help=btn_help):
+                            db.toggle_task_complete(t['id'])
+                            st.cache_data.clear()
+                            st.rerun()
+                    with bcol2:
+                        if st.button("🗑️", key=f"del_{t['id']}", help="Delete task"):
+                            db.delete_task(t['id'])
+                            st.cache_data.clear()
+                            st.rerun()
+
+# ===========================================================================
+# TAB 2: BALANCE BOARD
+# ===========================================================================
+with tab_balance:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1e293b, #0f3460); border-radius: 12px;
+                padding: 1rem 1.5rem; margin-bottom: 1rem; border: 1px solid #334155;">
+        <h3 style="margin:0; color:#38bdf8 !important;">⚖️ Balance Board</h3>
+        <p style="margin:0.3rem 0 0 0; color:#94a3b8 !important; font-size:0.9rem;">
+            A blameless look at how household work is distributed.
+            Not about who's slacking — it's about making sure things feel fair for everyone.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    time_range = st.selectbox("Time range", [2, 4, 8, 12], index=1,
+                               format_func=lambda w: f"Past {w} weeks", key="equity_range")
+    equity = db.get_equity_stats(weeks_back=time_range)
+
+    if not equity['assigned']:
+        st.info("No tasks assigned yet! Start adding tasks and the Balance Board will show how the workload is distributed.")
+    else:
+        # --- Overall workload split ---
+        st.markdown("### 🎯 Workload Split")
+        total_assigned = sum(p['assigned_count'] for p in equity['assigned'])
+
+        eq_cols = st.columns(len(equity['assigned']))
+        for idx, person in enumerate(equity['assigned']):
+            pct = int(person['assigned_count'] / total_assigned * 100) if total_assigned > 0 else 0
+            comp_pct = int(person['completed_count'] / person['assigned_count'] * 100) if person['assigned_count'] > 0 else 0
+            with eq_cols[idx]:
+                st.markdown(f"""
+                <div class="stat-card" style="border-top: 4px solid {person['color']};">
+                    <div style="font-size:2rem;">{person['avatar']}</div>
+                    <div style="font-weight:700; font-size:1.1rem; color:#f1f5f9 !important;">{person['name']}</div>
+                    <div class="stat-number">{pct}%</div>
+                    <div class="stat-label">of tasks ({person['assigned_count']} total)</div>
+                    <div class="progress-container" style="margin-top:0.5rem;">
+                        <div class="progress-fill" style="width:{comp_pct}%; background:{person['color']};"></div>
+                    </div>
+                    <div class="stat-label">{comp_pct}% completion rate</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Fairness indicator
+        if len(equity['assigned']) >= 2:
+            pcts = [p['assigned_count'] / total_assigned * 100 for p in equity['assigned']]
+            max_diff = max(pcts) - min(pcts)
+            if max_diff <= 10:
+                fairness_emoji = "🟢"
+                fairness_msg = "Looking really balanced! Great teamwork."
+            elif max_diff <= 25:
+                fairness_emoji = "🟡"
+                fairness_msg = "Slightly uneven — might be worth a quick check-in to see if anyone wants to swap some tasks."
+            else:
+                fairness_emoji = "🟠"
+                fairness_msg = "One person has quite a bit more on their plate. A good chance to redistribute!"
+
+            st.markdown(f"""
+            <div style="background:#1e293b; border-radius:10px; padding:0.8rem 1.2rem;
+                        margin:1rem 0; border: 1px solid #334155;
+                        display:flex; align-items:center; gap:0.8rem;">
+                <span style="font-size:1.5rem;">{fairness_emoji}</span>
+                <div>
+                    <strong style="color:#f1f5f9 !important;">Fairness Check:</strong>
+                    <span style="color:#cbd5e1 !important;"> {fairness_msg}</span>
+                    <br><span style="color:#64748b !important; font-size:0.8rem;">
+                    Spread: {max_diff:.0f}% difference · An even split would be {100/len(equity['assigned']):.0f}% each
+                    </span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # --- Category breakdown ---
+        st.markdown("### 🏷️ Who Does What?")
+        st.caption("See which types of chores each person tends to handle — useful for mixing things up!")
+
+        people_names = list(dict.fromkeys(r['person_name'] for r in equity['by_category']))
+        if people_names:
+            cat_cols = st.columns(len(people_names))
+            for idx, person_name in enumerate(people_names):
+                person_cats = [r for r in equity['by_category'] if r['person_name'] == person_name]
+                with cat_cols[idx]:
+                    p_color = person_cats[0]['person_color'] if person_cats else '#94a3b8'
+                    st.markdown(f"<div style='font-weight:700; color:{p_color} !important; font-size:1.1rem; margin-bottom:0.5rem;'>{person_name}</div>",
+                               unsafe_allow_html=True)
+                    for pc in person_cats:
+                        cat_name = pc['category_name'] or 'Uncategorized'
+                        cat_icon = pc['category_icon'] or '📋'
+                        st.markdown(f"""
+                        <div style="display:flex; justify-content:space-between; align-items:center;
+                                    padding:0.4rem 0; border-bottom: 1px solid #334155;">
+                            <span style="color:#cbd5e1 !important;">{cat_icon} {cat_name}</span>
+                            <span style="font-weight:600; color:#f1f5f9 !important;">{pc['count']}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+        # --- Unassigned tasks callout ---
+        if equity['unassigned'] > 0:
+            st.markdown(f"""
+            <div style="background:#1e293b; border-radius:10px; padding:0.8rem 1.2rem;
+                        margin:1rem 0; border-left: 4px solid #f59e0b; border: 1px solid #334155;
+                        border-left: 4px solid #f59e0b;">
+                <strong style="color:#fbbf24 !important;">📋 {equity['unassigned']} unassigned task{'s' if equity['unassigned'] != 1 else ''}</strong>
+                <span style="color:#94a3b8 !important;"> in this period — grab some to help balance the load!</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style="text-align:center; color:#64748b !important; font-size:0.8rem; margin-top:1rem;">
+            Showing data from {equity['period_start'].strftime('%b %d')} to {equity['period_end'].strftime('%b %d, %Y')}
+        </div>
+        """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# FOOTER
+# ---------------------------------------------------------------------------
+st.markdown("<hr style='border-color:#334155;'>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center; color:#64748b !important; font-size:0.8rem; padding:0.5rem;'>"
+    "🏠 Home Command Center — Built with ❤️ for your household"
+    "</div>",
+    unsafe_allow_html=True
+)
