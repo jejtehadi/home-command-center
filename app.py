@@ -570,11 +570,26 @@ with tab_calendar:
                             st.toast(f"Task {completion_status}!")
                             st.rerun()
                     with bcol2:
-                        if st.button("🗑️", key=f"del_{t['id']}", help="Delete task"):
-                            db.delete_task(t['id'])
-                            st.cache_data.clear()
-                            st.toast("Task deleted")
-                            st.rerun()
+                        if t.get('recurrence'):
+                            dc1, dc2 = st.columns(2)
+                            with dc1:
+                                if st.button("🗑️", key=f"del_{t['id']}", help="Delete this one"):
+                                    db.delete_task(t['id'])
+                                    st.cache_data.clear()
+                                    st.toast("Task deleted")
+                                    st.rerun()
+                            with dc2:
+                                if st.button("🗑️🔄", key=f"del_all_{t['id']}", help="Delete all future"):
+                                    db.delete_task(t['id'], delete_future=True)
+                                    st.cache_data.clear()
+                                    st.toast("All future recurring tasks deleted")
+                                    st.rerun()
+                        else:
+                            if st.button("🗑️", key=f"del_{t['id']}", help="Delete task"):
+                                db.delete_task(t['id'])
+                                st.cache_data.clear()
+                                st.toast("Task deleted")
+                                st.rerun()
 
 # ===========================================================================
 # TAB 2: BALANCE BOARD

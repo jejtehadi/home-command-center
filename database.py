@@ -270,10 +270,18 @@ def delete_task(task_id, delete_future=False):
             parent_id = task.get("parent_task_id") or task["id"]
             task_date = task["due_date"]
 
-            # Delete this task and all future instances from same recurrence chain
-            supabase.table("tasks").delete().or_(
-                f"id.eq.{parent_id},and(recurrence_parent_id.eq.{parent_id},due_date.gte.{task_date})"
-            ).execute()
+            # Delete future instances that share the same parent
+            supabase.table("tasks").delete().eq(
+                "parent_task_id", parent_id
+            ).gte("due_date", task_date).execute()
+
+            # Also delete the parent task itself if it's on or after task_date
+            parent_resp = supabase.table("tasks").select("due_date").eq("id", parent_id).execute()
+            if parent_resp.data and parent_resp.data[0]["due_date"] >= task_date:
+                supabase.table("tasks").delete().eq("id", parent_id).execute()
+
+            # Delete the task itself (in case it IS the parent or has no parent_task_id)
+            supabase.table("tasks").delete().eq("id", task_id).execute()
     else:
         supabase.table("tasks").delete().eq("id", task_id).execute()
 
