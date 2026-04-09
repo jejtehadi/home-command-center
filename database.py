@@ -147,7 +147,7 @@ def get_tasks_for_week(start_date: date):
     supabase = get_supabase()
 
     # Fetch tasks in date range
-    response = supabase.table("tasks").select("*").gte("due_date", start_date.isoformat()).lte("due_date", end_date.isoformat()).order("due_date").order("due_time").order("priority", ascending=False).execute()
+    response = supabase.table("tasks").select("*").gte("due_date", start_date.isoformat()).lte("due_date", end_date.isoformat()).order("due_date").order("due_time").order("priority", desc=True).execute()
     tasks = response.data if response.data else []
 
     # Fetch all people and categories for mapping
@@ -165,7 +165,7 @@ def get_tasks_for_date(target_date: date):
     supabase = get_supabase()
 
     # Fetch tasks for the specific date
-    response = supabase.table("tasks").select("*").eq("due_date", target_date.isoformat()).order("due_time").order("priority", ascending=False).execute()
+    response = supabase.table("tasks").select("*").eq("due_date", target_date.isoformat()).order("due_time").order("priority", desc=True).execute()
     tasks = response.data if response.data else []
 
     # Fetch all people and categories for mapping
