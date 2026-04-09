@@ -1,190 +1,217 @@
 """
 Database layer for the Household Chore Tracker.
-Uses SQLite for simple, file-based persistence.
+Uses Supabase (PostgreSQL) for cloud-based persistence.
 """
 
-import sqlite3
+import streamlit as st
 import os
 from datetime import datetime, date, timedelta
-from contextlib import contextmanager
+from supabase import create_client, Client
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chores.db")
+# Initialize Supabase client
+def _get_supabase_client() -> Client:
+    """Get or create a Supabase client with credentials from secrets or env."""
+    # Try st.secrets first (for Streamlit Cloud), then env vars, then hardcoded defaults
+    supabase_url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL") or "https://zlbucvsbihigtqpeuxgw.supabase.co"
+    supabase_key = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYnVjdnNiaWhpZ3RxcGV1eGd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3Njg3MTksImV4cCI6MjA5MTM0NDcxOX0.0OYOf30DCYxYq9pnOehFe_JciUxUsmPiKq1or4v9ujA"
 
-@contextmanager
-def get_db():
-    """Context manager for database connections."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    return create_client(supabase_url, supabase_key)
+
+@st.cache_resource
+def get_supabase():
+    """Cached Supabase client."""
+    return _get_supabase_client()
 
 def init_db():
-    """Initialize the database schema."""
-    with get_db() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS people (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                color TEXT NOT NULL DEFAULT '#4A90D9',
-                avatar TEXT NOT NULL DEFAULT '👤',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                color TEXT NOT NULL DEFAULT '#6B7280',
-                icon TEXT NOT NULL DEFAULT '📋',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
-                assigned_to INTEGER REFERENCES people(id) ON DELETE SET NULL,
-                due_date DATE NOT NULL,
-                due_time TEXT DEFAULT NULL,
-                is_completed INTEGER DEFAULT 0,
-                completed_at TIMESTAMP DEFAULT NULL,
-                recurrence TEXT DEFAULT NULL,  -- 'daily', 'weekly', 'biweekly', 'monthly', or NULL
-                recurrence_parent_id INTEGER DEFAULT NULL,
-                priority TEXT DEFAULT 'medium',  -- 'low', 'medium', 'high'
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
-            CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
-            CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category_id);
-        """)
+    """Initialize the database schema (tables should already exist in Supabase)."""
+    # Tables are pre-created in Supabase, but we'll seed defaults if needed
+    seed_defaults()
 
 def seed_defaults():
     """Seed default people and categories if empty."""
-    with get_db() as conn:
-        # Check if already seeded
-        count = conn.execute("SELECT COUNT(*) FROM people").fetchone()[0]
-        if count == 0:
-            conn.executemany(
-                "INSERT INTO people (name, color, avatar) VALUES (?, ?, ?)",
-                [
-                    ("Justin", "#4A90D9", "👨"),
-                    ("Wife", "#E91E8A", "👩"),
-                ]
-            )
+    supabase = get_supabase()
 
-        count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
-        if count == 0:
-            conn.executemany(
-                "INSERT INTO categories (name, color, icon) VALUES (?, ?, ?)",
-                [
-                    ("Cleaning", "#10B981", "🧹"),
-                    ("Kitchen", "#F59E0B", "🍳"),
-                    ("Laundry", "#8B5CF6", "👕"),
-                    ("Yard Work", "#059669", "🌿"),
-                    ("Errands", "#EF4444", "🚗"),
-                    ("Pets", "#F97316", "🐾"),
-                    ("Home Maintenance", "#6366F1", "🔧"),
-                    ("Groceries", "#14B8A6", "🛒"),
-                ]
-            )
+    # Check if people table is empty
+    people_count = supabase.table("people").select("id", count="exact").execute()
+    if people_count.count == 0:
+        supabase.table("people").insert([
+            {"name": "Justin", "color": "#4A90D9", "avatar": "👨"},
+            {"name": "Wife", "color": "#E91E8A", "avatar": "👩"},
+        ]).execute()
+
+    # Check if categories table is empty
+    categories_count = supabase.table("categories").select("id", count="exact").execute()
+    if categories_count.count == 0:
+        supabase.table("categories").insert([
+            {"name": "Cleaning", "color": "#10B981", "icon": "🧹"},
+            {"name": "Kitchen", "color": "#F59E0B", "icon": "🍳"},
+            {"name": "Laundry", "color": "#8B5CF6", "icon": "👕"},
+            {"name": "Yard Work", "color": "#059669", "icon": "🌿"},
+            {"name": "Errands", "color": "#EF4444", "icon": "🚗"},
+            {"name": "Pets", "color": "#F97316", "icon": "🐾"},
+            {"name": "Home Maintenance", "color": "#6366F1", "icon": "🔧"},
+            {"name": "Groceries", "color": "#14B8A6", "icon": "🛒"},
+        ]).execute()
 
 # --- CRUD: People ---
 
 def get_people():
-    with get_db() as conn:
-        return [dict(r) for r in conn.execute("SELECT * FROM people ORDER BY name").fetchall()]
+    """Get all people, ordered by name."""
+    supabase = get_supabase()
+    response = supabase.table("people").select("*").order("name").execute()
+    return response.data if response.data else []
 
 def add_person(name, color, avatar="👤"):
-    with get_db() as conn:
-        conn.execute("INSERT INTO people (name, color, avatar) VALUES (?, ?, ?)", (name, color, avatar))
+    """Add a new person."""
+    supabase = get_supabase()
+    supabase.table("people").insert({
+        "name": name,
+        "color": color,
+        "avatar": avatar
+    }).execute()
 
 def update_person(person_id, name, color, avatar):
-    with get_db() as conn:
-        conn.execute("UPDATE people SET name=?, color=?, avatar=? WHERE id=?", (name, color, avatar, person_id))
+    """Update a person's details."""
+    supabase = get_supabase()
+    supabase.table("people").update({
+        "name": name,
+        "color": color,
+        "avatar": avatar
+    }).eq("id", person_id).execute()
 
 def delete_person(person_id):
-    with get_db() as conn:
-        conn.execute("DELETE FROM people WHERE id=?", (person_id,))
+    """Delete a person."""
+    supabase = get_supabase()
+    supabase.table("people").delete().eq("id", person_id).execute()
 
 # --- CRUD: Categories ---
 
 def get_categories():
-    with get_db() as conn:
-        return [dict(r) for r in conn.execute("SELECT * FROM categories ORDER BY name").fetchall()]
+    """Get all categories, ordered by name."""
+    supabase = get_supabase()
+    response = supabase.table("categories").select("*").order("name").execute()
+    return response.data if response.data else []
 
 def add_category(name, color, icon="📋"):
-    with get_db() as conn:
-        conn.execute("INSERT INTO categories (name, color, icon) VALUES (?, ?, ?)", (name, color, icon))
+    """Add a new category."""
+    supabase = get_supabase()
+    supabase.table("categories").insert({
+        "name": name,
+        "color": color,
+        "icon": icon
+    }).execute()
 
 def update_category(cat_id, name, color, icon):
-    with get_db() as conn:
-        conn.execute("UPDATE categories SET name=?, color=?, icon=? WHERE id=?", (name, color, icon, cat_id))
+    """Update a category's details."""
+    supabase = get_supabase()
+    supabase.table("categories").update({
+        "name": name,
+        "color": color,
+        "icon": icon
+    }).eq("id", cat_id).execute()
 
 def delete_category(cat_id):
-    with get_db() as conn:
-        conn.execute("DELETE FROM categories WHERE id=?", (cat_id,))
+    """Delete a category."""
+    supabase = get_supabase()
+    supabase.table("categories").delete().eq("id", cat_id).execute()
 
 # --- CRUD: Tasks ---
+
+def _merge_task_with_relations(task, people_map, categories_map):
+    """Merge task with related person and category data."""
+    if task.get("assigned_to") and task["assigned_to"] in people_map:
+        person = people_map[task["assigned_to"]]
+        task["person_name"] = person["name"]
+        task["person_color"] = person["color"]
+        task["person_avatar"] = person["avatar"]
+    else:
+        task["person_name"] = None
+        task["person_color"] = None
+        task["person_avatar"] = None
+
+    if task.get("category_id") and task["category_id"] in categories_map:
+        category = categories_map[task["category_id"]]
+        task["category_name"] = category["name"]
+        task["category_color"] = category["color"]
+        task["category_icon"] = category["icon"]
+    else:
+        task["category_name"] = None
+        task["category_color"] = None
+        task["category_icon"] = None
+
+    return task
 
 def get_tasks_for_week(start_date: date):
     """Get all tasks for a 7-day window starting from start_date."""
     end_date = start_date + timedelta(days=6)
-    with get_db() as conn:
-        rows = conn.execute("""
-            SELECT t.*, p.name as person_name, p.color as person_color, p.avatar as person_avatar,
-                   c.name as category_name, c.color as category_color, c.icon as category_icon
-            FROM tasks t
-            LEFT JOIN people p ON t.assigned_to = p.id
-            LEFT JOIN categories c ON t.category_id = c.id
-            WHERE t.due_date BETWEEN ? AND ?
-            ORDER BY t.due_date, t.due_time, t.priority DESC
-        """, (start_date.isoformat(), end_date.isoformat())).fetchall()
-        return [dict(r) for r in rows]
+    supabase = get_supabase()
+
+    # Fetch tasks in date range
+    response = supabase.table("tasks").select("*").gte("due_date", start_date.isoformat()).lte("due_date", end_date.isoformat()).order("due_date").order("due_time").order("priority", ascending=False).execute()
+    tasks = response.data if response.data else []
+
+    # Fetch all people and categories for mapping
+    people_response = supabase.table("people").select("id, name, color, avatar").execute()
+    people_map = {p["id"]: p for p in people_response.data} if people_response.data else {}
+
+    categories_response = supabase.table("categories").select("id, name, color, icon").execute()
+    categories_map = {c["id"]: c for c in categories_response.data} if categories_response.data else {}
+
+    # Merge relations
+    return [_merge_task_with_relations(task, people_map, categories_map) for task in tasks]
 
 def get_tasks_for_date(target_date: date):
     """Get all tasks for a specific date."""
-    with get_db() as conn:
-        rows = conn.execute("""
-            SELECT t.*, p.name as person_name, p.color as person_color, p.avatar as person_avatar,
-                   c.name as category_name, c.color as category_color, c.icon as category_icon
-            FROM tasks t
-            LEFT JOIN people p ON t.assigned_to = p.id
-            LEFT JOIN categories c ON t.category_id = c.id
-            WHERE t.due_date = ?
-            ORDER BY t.due_time, t.priority DESC
-        """, (target_date.isoformat(),)).fetchall()
-        return [dict(r) for r in rows]
+    supabase = get_supabase()
+
+    # Fetch tasks for the specific date
+    response = supabase.table("tasks").select("*").eq("due_date", target_date.isoformat()).order("due_time").order("priority", ascending=False).execute()
+    tasks = response.data if response.data else []
+
+    # Fetch all people and categories for mapping
+    people_response = supabase.table("people").select("id, name, color, avatar").execute()
+    people_map = {p["id"]: p for p in people_response.data} if people_response.data else {}
+
+    categories_response = supabase.table("categories").select("id, name, color, icon").execute()
+    categories_map = {c["id"]: c for c in categories_response.data} if categories_response.data else {}
+
+    # Merge relations
+    return [_merge_task_with_relations(task, people_map, categories_map) for task in tasks]
 
 def add_task(title, due_date, category_id=None, assigned_to=None, due_time=None,
              description="", recurrence=None, priority="medium"):
-    with get_db() as conn:
-        cursor = conn.execute("""
-            INSERT INTO tasks (title, due_date, category_id, assigned_to, due_time,
-                             description, recurrence, priority)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (title, due_date, category_id, assigned_to, due_time, description, recurrence, priority))
-        task_id = cursor.lastrowid
+    """Add a new task and generate recurring instances if applicable."""
+    supabase = get_supabase()
 
-        # If recurring, generate future instances
-        if recurrence:
-            _generate_recurring_tasks(conn, task_id, title, due_date, category_id,
-                                       assigned_to, due_time, description, recurrence, priority)
-        return task_id
+    # Insert the task
+    response = supabase.table("tasks").insert({
+        "title": title,
+        "due_date": due_date.isoformat() if isinstance(due_date, date) else due_date,
+        "category_id": category_id,
+        "assigned_to": assigned_to,
+        "due_time": due_time,
+        "description": description,
+        "recurrence": recurrence,
+        "priority": priority
+    }).execute()
 
-def _generate_recurring_tasks(conn, parent_id, title, start_date, category_id,
-                                assigned_to, due_time, description, recurrence, priority, weeks_ahead=8):
+    task_id = response.data[0]["id"] if response.data else None
+
+    # If recurring, generate future instances
+    if recurrence and task_id:
+        _generate_recurring_tasks(task_id, title, due_date, category_id,
+                                  assigned_to, due_time, description, recurrence, priority)
+
+    return task_id
+
+def _generate_recurring_tasks(parent_id, title, start_date, category_id,
+                              assigned_to, due_time, description, recurrence, priority, weeks_ahead=8):
     """Generate recurring task instances for the next N weeks."""
     if isinstance(start_date, str):
         start_date = date.fromisoformat(start_date)
+
+    supabase = get_supabase()
+    tasks_to_insert = []
 
     current = start_date
     for _ in range(weeks_ahead * 7 if recurrence == 'daily' else weeks_ahead):
@@ -195,15 +222,23 @@ def _generate_recurring_tasks(conn, parent_id, title, start_date, category_id,
         elif recurrence == 'biweekly':
             current += timedelta(weeks=2)
         elif recurrence == 'monthly':
-            # Approximate: add 30 days
             current += timedelta(days=30)
 
-        conn.execute("""
-            INSERT INTO tasks (title, due_date, category_id, assigned_to, due_time,
-                             description, recurrence, recurrence_parent_id, priority)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (title, current.isoformat(), category_id, assigned_to, due_time,
-              description, recurrence, parent_id, priority))
+        tasks_to_insert.append({
+            "title": title,
+            "due_date": current.isoformat(),
+            "category_id": category_id,
+            "assigned_to": assigned_to,
+            "due_time": due_time,
+            "description": description,
+            "recurrence": recurrence,
+            "parent_task_id": parent_id,
+            "priority": priority
+        })
+
+    # Insert all at once
+    if tasks_to_insert:
+        supabase.table("tasks").insert(tasks_to_insert).execute()
 
 def update_task(task_id, **kwargs):
     """Update a task with given keyword arguments."""
@@ -213,68 +248,89 @@ def update_task(task_id, **kwargs):
     if not updates:
         return
 
+    # Handle date/datetime conversions
+    if 'due_date' in updates and isinstance(updates['due_date'], date):
+        updates['due_date'] = updates['due_date'].isoformat()
+
     if 'is_completed' in updates and updates['is_completed']:
         updates['completed_at'] = datetime.now().isoformat()
 
-    set_clause = ", ".join(f"{k}=?" for k in updates)
-    values = list(updates.values()) + [task_id]
-
-    with get_db() as conn:
-        conn.execute(f"UPDATE tasks SET {set_clause} WHERE id=?", values)
+    supabase = get_supabase()
+    supabase.table("tasks").update(updates).eq("id", task_id).execute()
 
 def delete_task(task_id, delete_future=False):
     """Delete a task. Optionally delete all future recurring instances."""
-    with get_db() as conn:
-        if delete_future:
+    supabase = get_supabase()
+
+    if delete_future:
+        # Fetch the task to get recurrence info
+        response = supabase.table("tasks").select("*").eq("id", task_id).execute()
+        if response.data:
+            task = response.data[0]
+            parent_id = task.get("parent_task_id") or task["id"]
+            task_date = task["due_date"]
+
             # Delete this task and all future instances from same recurrence chain
-            task = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
-            if task:
-                parent_id = task['recurrence_parent_id'] or task['id']
-                conn.execute("""
-                    DELETE FROM tasks
-                    WHERE (id=? OR recurrence_parent_id=?) AND due_date >= ?
-                """, (parent_id, parent_id, task['due_date']))
-        else:
-            conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+            supabase.table("tasks").delete().or_(
+                f"id.eq.{parent_id},and(recurrence_parent_id.eq.{parent_id},due_date.gte.{task_date})"
+            ).execute()
+    else:
+        supabase.table("tasks").delete().eq("id", task_id).execute()
 
 def toggle_task_complete(task_id):
     """Toggle a task's completion status."""
-    with get_db() as conn:
-        task = conn.execute("SELECT is_completed FROM tasks WHERE id=?", (task_id,)).fetchone()
-        if task:
-            new_status = 0 if task['is_completed'] else 1
-            completed_at = datetime.now().isoformat() if new_status else None
-            conn.execute("UPDATE tasks SET is_completed=?, completed_at=? WHERE id=?",
-                        (new_status, completed_at, task_id))
+    supabase = get_supabase()
+
+    # Fetch current task
+    response = supabase.table("tasks").select("is_completed").eq("id", task_id).execute()
+    if response.data:
+        task = response.data[0]
+        new_status = not task["is_completed"]
+        completed_at = datetime.now().isoformat() if new_status else None
+
+        supabase.table("tasks").update({
+            "is_completed": new_status,
+            "completed_at": completed_at
+        }).eq("id", task_id).execute()
 
 def get_stats(start_date: date, end_date: date):
     """Get completion stats for a date range."""
-    with get_db() as conn:
-        total = conn.execute(
-            "SELECT COUNT(*) FROM tasks WHERE due_date BETWEEN ? AND ?",
-            (start_date.isoformat(), end_date.isoformat())
-        ).fetchone()[0]
+    supabase = get_supabase()
 
-        completed = conn.execute(
-            "SELECT COUNT(*) FROM tasks WHERE due_date BETWEEN ? AND ? AND is_completed=1",
-            (start_date.isoformat(), end_date.isoformat())
-        ).fetchone()[0]
+    # Total tasks in range
+    total_response = supabase.table("tasks").select("id", count="exact").gte("due_date", start_date.isoformat()).lte("due_date", end_date.isoformat()).execute()
+    total = total_response.count if total_response.count is not None else 0
 
-        by_person = conn.execute("""
-            SELECT p.name, p.color, p.avatar,
-                   COUNT(*) as total,
-                   SUM(CASE WHEN t.is_completed=1 THEN 1 ELSE 0 END) as done
-            FROM tasks t
-            JOIN people p ON t.assigned_to = p.id
-            WHERE t.due_date BETWEEN ? AND ?
-            GROUP BY p.id
-        """, (start_date.isoformat(), end_date.isoformat())).fetchall()
+    # Completed tasks in range
+    completed_response = supabase.table("tasks").select("id", count="exact").gte("due_date", start_date.isoformat()).lte("due_date", end_date.isoformat()).eq("is_completed", True).execute()
+    completed = completed_response.count if completed_response.count is not None else 0
 
-        return {
-            "total": total,
-            "completed": completed,
-            "by_person": [dict(r) for r in by_person]
-        }
+    # Tasks by person
+    all_tasks_response = supabase.table("tasks").select("*").gte("due_date", start_date.isoformat()).lte("due_date", end_date.isoformat()).execute()
+    all_tasks = all_tasks_response.data if all_tasks_response.data else []
+
+    people_response = supabase.table("people").select("*").execute()
+    people = people_response.data if people_response.data else []
+
+    by_person = []
+    for person in people:
+        person_tasks = [t for t in all_tasks if t.get("assigned_to") == person["id"]]
+        if person_tasks:
+            total_count = len(person_tasks)
+            done_count = sum(1 for t in person_tasks if t.get("is_completed"))
+            by_person.append({
+                "name": person["name"],
+                "color": person["color"],
+                "avatar": person["avatar"],
+                "total": total_count,
+                "done": done_count
+            })
+
+    return {
+        "total": total,
+        "completed": completed,
+        "by_person": by_person
+    }
 
 def get_equity_stats(weeks_back=4):
     """
@@ -284,59 +340,92 @@ def get_equity_stats(weeks_back=4):
     end = date.today()
     start = end - timedelta(weeks=weeks_back)
 
-    with get_db() as conn:
-        # Tasks assigned per person
-        assigned = conn.execute("""
-            SELECT p.id, p.name, p.color, p.avatar,
-                   COUNT(*) as assigned_count,
-                   SUM(CASE WHEN t.is_completed=1 THEN 1 ELSE 0 END) as completed_count
-            FROM tasks t
-            JOIN people p ON t.assigned_to = p.id
-            WHERE t.due_date BETWEEN ? AND ?
-            GROUP BY p.id
-            ORDER BY p.name
-        """, (start.isoformat(), end.isoformat())).fetchall()
+    supabase = get_supabase()
 
-        # Tasks by category per person
-        by_category = conn.execute("""
-            SELECT p.name as person_name, p.color as person_color,
-                   c.name as category_name, c.icon as category_icon, c.color as category_color,
-                   COUNT(*) as count
-            FROM tasks t
-            JOIN people p ON t.assigned_to = p.id
-            LEFT JOIN categories c ON t.category_id = c.id
-            WHERE t.due_date BETWEEN ? AND ?
-            GROUP BY p.id, c.id
-            ORDER BY p.name, count DESC
-        """, (start.isoformat(), end.isoformat())).fetchall()
+    # Fetch all relevant tasks and people
+    tasks_response = supabase.table("tasks").select("*").gte("due_date", start.isoformat()).lte("due_date", end.isoformat()).execute()
+    tasks = tasks_response.data if tasks_response.data else []
 
-        # Weekly trend per person
-        weekly_trend = conn.execute("""
-            SELECT p.name, p.color,
-                   strftime('%Y-W%W', t.due_date) as week,
-                   COUNT(*) as count
-            FROM tasks t
-            JOIN people p ON t.assigned_to = p.id
-            WHERE t.due_date BETWEEN ? AND ?
-            GROUP BY p.id, week
-            ORDER BY week, p.name
-        """, (start.isoformat(), end.isoformat())).fetchall()
+    people_response = supabase.table("people").select("*").execute()
+    people = people_response.data if people_response.data else []
 
-        # Unassigned tasks
-        unassigned = conn.execute("""
-            SELECT COUNT(*) FROM tasks
-            WHERE assigned_to IS NULL AND due_date BETWEEN ? AND ?
-        """, (start.isoformat(), end.isoformat())).fetchone()[0]
+    categories_response = supabase.table("categories").select("*").execute()
+    categories = categories_response.data if categories_response.data else []
 
-        return {
-            "assigned": [dict(r) for r in assigned],
-            "by_category": [dict(r) for r in by_category],
-            "weekly_trend": [dict(r) for r in weekly_trend],
-            "unassigned": unassigned,
-            "period_start": start,
-            "period_end": end,
-        }
+    # Tasks assigned per person
+    assigned = []
+    for person in people:
+        person_tasks = [t for t in tasks if t.get("assigned_to") == person["id"]]
+        if person_tasks:
+            assigned_count = len(person_tasks)
+            completed_count = sum(1 for t in person_tasks if t.get("is_completed"))
+            assigned.append({
+                "id": person["id"],
+                "name": person["name"],
+                "color": person["color"],
+                "avatar": person["avatar"],
+                "assigned_count": assigned_count,
+                "completed_count": completed_count
+            })
+
+    # Tasks by category per person
+    by_category = []
+    for person in people:
+        person_tasks = [t for t in tasks if t.get("assigned_to") == person["id"]]
+        if person_tasks:
+            # Group by category
+            category_counts = {}
+            for task in person_tasks:
+                cat_id = task.get("category_id")
+                if cat_id not in category_counts:
+                    category_counts[cat_id] = 0
+                category_counts[cat_id] += 1
+
+            # Convert to entries with category details
+            for cat_id, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
+                category = next((c for c in categories if c["id"] == cat_id), None)
+                by_category.append({
+                    "person_name": person["name"],
+                    "person_color": person["color"],
+                    "category_name": category["name"] if category else None,
+                    "category_icon": category["icon"] if category else None,
+                    "category_color": category["color"] if category else None,
+                    "count": count
+                })
+
+    # Weekly trend per person (simplified: group by week number)
+    weekly_trend = []
+    for person in people:
+        person_tasks = [t for t in tasks if t.get("assigned_to") == person["id"]]
+        if person_tasks:
+            # Group by ISO calendar week
+            week_counts = {}
+            for task in person_tasks:
+                task_date = date.fromisoformat(task["due_date"])
+                week_key = task_date.isocalendar()[1]  # Week number
+                if week_key not in week_counts:
+                    week_counts[week_key] = 0
+                week_counts[week_key] += 1
+
+            for week, count in sorted(week_counts.items()):
+                weekly_trend.append({
+                    "name": person["name"],
+                    "color": person["color"],
+                    "week": f"W{week:02d}",
+                    "count": count
+                })
+
+    # Unassigned tasks
+    unassigned = sum(1 for t in tasks if t.get("assigned_to") is None)
+
+    return {
+        "assigned": assigned,
+        "by_category": by_category,
+        "weekly_trend": weekly_trend,
+        "unassigned": unassigned,
+        "period_start": start,
+        "period_end": end,
+    }
 
 # Initialize on import
 init_db()
-seed_defaults()

@@ -18,15 +18,15 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Dark/Gray Theme CSS
+# Dark/Gray Theme CSS — IMPROVED
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* ---- Base dark theme ---- */
-    .stApp { background-color: #1a1a2e; color: #e0e0e0; }
+    /* ---- Base dark theme — softer colors ---- */
+    .stApp { background-color: #1e1e32; color: #e0e0e0; }
     #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
     footer {visibility: hidden;}
+    [data-testid="stToolbar"] {display: none;}
 
     /* Force all Streamlit text white */
     .stApp p, .stApp span, .stApp label, .stApp div,
@@ -50,10 +50,10 @@ st.markdown("""
 
     /* Input fields */
     .stTextInput input, .stSelectbox select, .stDateInput input {
-        background-color: #1e293b !important; color: #e0e0e0 !important;
+        background-color: #222640 !important; color: #e0e0e0 !important;
         border-color: #475569 !important;
     }
-    [data-testid="stDateInput"] input { background-color: #1e293b !important; color: #e0e0e0 !important; }
+    [data-testid="stDateInput"] input { background-color: #222640 !important; color: #e0e0e0 !important; }
 
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { background-color: #16213e; border-radius: 8px; padding: 0.25rem; gap: 0; }
@@ -69,7 +69,7 @@ st.markdown("""
 
     /* Buttons */
     .stButton > button {
-        border-radius: 8px; background-color: #1e293b; color: #e0e0e0;
+        border-radius: 8px; background-color: #222640; color: #e0e0e0;
         border: 1px solid #475569;
     }
     .stButton > button:hover { background-color: #334155; border-color: #64748b; }
@@ -79,7 +79,7 @@ st.markdown("""
     .stButton > button[kind="primary"]:hover { background-color: #1a5276; }
 
     /* Info boxes */
-    [data-testid="stAlert"] { background-color: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+    [data-testid="stAlert"] { background-color: #222640; color: #94a3b8; border: 1px solid #334155; }
 
     /* ---- Top banner ---- */
     .top-banner {
@@ -91,6 +91,16 @@ st.markdown("""
     .top-banner h1 { margin: 0; font-size: 1.8rem; font-weight: 700; color: #f1f5f9 !important; }
     .top-banner .date-display { font-size: 1.1rem; color: #94a3b8 !important; }
 
+    /* ---- Today's Focus Section ---- */
+    .todays-focus {
+        background: linear-gradient(135deg, #1a3a52, #0f3460);
+        border-radius: 10px; padding: 0.8rem 1.2rem; margin-bottom: 1.5rem;
+        border: 1px solid #1a5276; display: flex; align-items: center; gap: 1rem;
+    }
+    .todays-focus .focus-icon { font-size: 1.8rem; }
+    .todays-focus .focus-text h3 { margin: 0; color: #38bdf8 !important; font-size: 1.1rem; }
+    .todays-focus .focus-text p { margin: 0.2rem 0 0 0; color: #94a3b8 !important; font-size: 0.9rem; }
+
     /* ---- Day column headers ---- */
     .day-header {
         text-align: center; padding: 0.6rem 0.3rem; border-radius: 10px;
@@ -100,7 +110,7 @@ st.markdown("""
         background: linear-gradient(135deg, #0f3460, #1a5276);
         color: #ffffff; border: 1px solid #2980b9;
     }
-    .day-header.other { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+    .day-header.other { background: #222640; color: #94a3b8; border: 1px solid #334155; }
     .day-header .day-name {
         font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;
         color: inherit !important;
@@ -109,13 +119,14 @@ st.markdown("""
 
     /* ---- Task cards ---- */
     .task-card {
-        border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
-        border-left: 4px solid; background: #1e293b;
+        border-radius: 10px; padding: 0.5rem 0.6rem; margin-bottom: 0.5rem;
+        border-left: 4px solid; background: #222640;
         box-shadow: 0 1px 4px rgba(0,0,0,0.3); font-size: 0.85rem;
         transition: transform 0.1s; cursor: pointer;
     }
     .task-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
-    .task-card.completed { opacity: 0.45; text-decoration: line-through; }
+    .task-card.completed { opacity: 0.35; text-decoration: line-through; }
+    .task-card.completed .task-title::before { content: "✓ "; color: #10b981; }
     .task-card .task-title { font-weight: 600; margin-bottom: 0.2rem; color: #f1f5f9 !important; }
     .task-card .task-meta {
         display: flex; justify-content: space-between; align-items: center;
@@ -128,9 +139,17 @@ st.markdown("""
     .priority-high { border-right: 3px solid #ef4444; }
     .priority-low { border-right: 3px solid #64748b; }
 
+    /* ---- Add task form card ---- */
+    .add-task-card {
+        background: linear-gradient(135deg, #222640, #1e293b);
+        border-radius: 12px; padding: 1.5rem;
+        border: 1px solid #334155; margin-bottom: 1.5rem;
+    }
+    .add-task-card h3 { margin-top: 0; color: #38bdf8 !important; }
+
     /* ---- Stat cards ---- */
     .stat-card {
-        background: #1e293b; border-radius: 12px; padding: 1rem; text-align: center;
+        background: #222640; border-radius: 12px; padding: 1rem; text-align: center;
         box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 1px solid #334155;
     }
     .stat-card .stat-number { font-size: 2rem; font-weight: 700; color: #38bdf8 !important; }
@@ -156,13 +175,41 @@ st.markdown("""
         padding: 0.15rem 0.5rem; border-radius: 8px; font-size: 0.7rem; font-weight: 500;
     }
 
+    /* ---- Empty states ---- */
+    .empty-day {
+        color: #64748b !important; font-style: italic; font-size: 0.8rem;
+        padding: 1rem 0; text-align: center;
+    }
+    .empty-day-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+
     /* ---- Misc ---- */
-    .empty-day { color: #64748b !important; font-style: italic; font-size: 0.8rem; padding: 1rem 0; text-align: center; }
     .recurrence-badge {
         font-size: 0.65rem; background: #1e3a5f; color: #7dd3fc !important;
         padding: 0.1rem 0.35rem; border-radius: 4px;
     }
     .stCheckbox label span { color: #cbd5e1 !important; }
+
+    /* ---- Mobile spacing improvements ---- */
+    @media (max-width: 768px) {
+        .task-card {
+            padding: 0.4rem 0.5rem;
+            font-size: 0.8rem;
+        }
+        .day-header {
+            padding: 0.4rem 0.2rem;
+        }
+        .top-banner {
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 1rem;
+        }
+        .top-banner h1 {
+            font-size: 1.4rem;
+        }
+        .add-task-card {
+            padding: 1rem;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -223,6 +270,7 @@ with st.sidebar:
                 if st.button("🗑️", key=f"del_person_{p['id']}", help=f"Remove {p['name']}"):
                     db.delete_person(p['id'])
                     st.cache_data.clear()
+                    st.toast(f"Removed {p['name']}")
                     st.rerun()
 
         st.markdown("---")
@@ -235,6 +283,7 @@ with st.sidebar:
             if new_name:
                 db.add_person(new_name.strip(), new_color, new_avatar)
                 st.cache_data.clear()
+                st.toast(f"Added {new_name}!")
                 st.rerun()
 
     with st.expander("🏷️ Categories", expanded=False):
@@ -250,6 +299,7 @@ with st.sidebar:
                 if st.button("🗑️", key=f"del_cat_{c['id']}", help=f"Remove {c['name']}"):
                     db.delete_category(c['id'])
                     st.cache_data.clear()
+                    st.toast(f"Removed {c['name']}")
                     st.rerun()
 
         st.markdown("---")
@@ -261,6 +311,7 @@ with st.sidebar:
             if cat_name:
                 db.add_category(cat_name.strip(), cat_color, cat_icon)
                 st.cache_data.clear()
+                st.toast(f"Added {cat_name}!")
                 st.rerun()
 
     st.markdown("---")
@@ -335,75 +386,97 @@ with tab_calendar:
             st.session_state.show_add_task = not st.session_state.show_add_task
             st.rerun()
 
-    # Add task form
+    # Today's focus section
+    week_start = st.session_state.current_week_start
+    today_tasks = [t for t in load_week_tasks(week_start) if date.fromisoformat(t['due_date']) == today]
+    todays_count = len([t for t in today_tasks if not t['is_completed']])
+
+    if todays_count > 0 or len(today_tasks) > 0:
+        completed_count = len([t for t in today_tasks if t['is_completed']])
+        focus_msg = f"You have {todays_count} task{'s' if todays_count != 1 else ''} today"
+        if completed_count > 0:
+            focus_msg += f" ({completed_count} done)"
+        st.markdown(f"""
+        <div class="todays-focus">
+            <div class="focus-icon">🎯</div>
+            <div class="focus-text">
+                <h3>Today's Focus</h3>
+                <p>{focus_msg}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Add task form — polished card style
     if st.session_state.show_add_task:
-        with st.container():
-            st.markdown("### ✏️ New Task")
-            people = load_people()
-            categories = load_categories()
+        st.markdown('<div class="add-task-card">', unsafe_allow_html=True)
+        st.markdown("### ✏️ New Task")
+        people = load_people()
+        categories = load_categories()
 
-            form_cols = st.columns([2, 1, 1, 1])
-            with form_cols[0]:
-                task_title = st.text_input("What needs to be done?", placeholder="e.g. Vacuum living room")
-            with form_cols[1]:
-                task_date = st.date_input("Due Date", value=today)
-            with form_cols[2]:
-                use_time = st.checkbox("Set time?", value=False)
-                task_time = None
-                if use_time:
-                    task_time = st.time_input("Time", value=time(9, 0))
-            with form_cols[3]:
-                priority = st.selectbox("Priority", ["low", "medium", "high"], index=1)
+        form_cols = st.columns([2, 1, 1, 1])
+        with form_cols[0]:
+            task_title = st.text_input("What needs to be done?", placeholder="e.g. Vacuum living room")
+        with form_cols[1]:
+            task_date = st.date_input("Due Date", value=today)
+        with form_cols[2]:
+            use_time = st.checkbox("Set time?", value=False)
+            task_time = None
+            if use_time:
+                task_time = st.time_input("Time", value=time(9, 0))
+        with form_cols[3]:
+            priority = st.selectbox("Priority", ["low", "medium", "high"], index=1)
 
-            form_cols2 = st.columns([1, 1, 1, 1])
-            with form_cols2[0]:
-                person_options = {p['id']: f"{p['avatar']} {p['name']}" for p in people}
-                person_options[None] = "👤 Unassigned"
-                assigned = st.selectbox("Assign to", options=list(person_options.keys()),
-                                         format_func=lambda x: person_options[x])
-            with form_cols2[1]:
-                cat_options = {c['id']: f"{c['icon']} {c['name']}" for c in categories}
-                cat_options[None] = "📋 No Category"
-                category = st.selectbox("Category", options=list(cat_options.keys()),
-                                         format_func=lambda x: cat_options[x])
-            with form_cols2[2]:
-                recurrence = st.selectbox("Repeat", [None, "daily", "weekly", "biweekly", "monthly"],
-                                           format_func=lambda x: {
-                                               None: "🔂 No repeat",
-                                               "daily": "📆 Daily",
-                                               "weekly": "🗓️ Weekly",
-                                               "biweekly": "📅 Every 2 weeks",
-                                               "monthly": "📅 Monthly"
-                                           }.get(x, x))
-            with form_cols2[3]:
-                description = st.text_input("Notes (optional)", placeholder="Any extra details...")
+        form_cols2 = st.columns([1, 1, 1, 1])
+        with form_cols2[0]:
+            person_options = {p['id']: f"{p['avatar']} {p['name']}" for p in people}
+            person_options[None] = "👤 Unassigned"
+            assigned = st.selectbox("Assign to", options=list(person_options.keys()),
+                                     format_func=lambda x: person_options[x])
+        with form_cols2[1]:
+            cat_options = {c['id']: f"{c['icon']} {c['name']}" for c in categories}
+            cat_options[None] = "📋 No Category"
+            category = st.selectbox("Category", options=list(cat_options.keys()),
+                                     format_func=lambda x: cat_options[x])
+        with form_cols2[2]:
+            recurrence = st.selectbox("Repeat", [None, "daily", "weekly", "biweekly", "monthly"],
+                                       format_func=lambda x: {
+                                           None: "🔂 No repeat",
+                                           "daily": "📆 Daily",
+                                           "weekly": "🗓️ Weekly",
+                                           "biweekly": "📅 Every 2 weeks",
+                                           "monthly": "📅 Monthly"
+                                       }.get(x, x))
+        with form_cols2[3]:
+            description = st.text_input("Notes (optional)", placeholder="Any extra details...")
 
-            col_save, col_cancel, _ = st.columns([1, 1, 4])
-            with col_save:
-                if st.button("💾 Save Task", type="primary", use_container_width=True):
-                    if task_title:
-                        time_str = task_time.strftime("%H:%M") if task_time else None
-                        db.add_task(
-                            title=task_title.strip(),
-                            due_date=task_date.isoformat(),
-                            category_id=category,
-                            assigned_to=assigned,
-                            due_time=time_str,
-                            description=description,
-                            recurrence=recurrence,
-                            priority=priority,
-                        )
-                        st.session_state.show_add_task = False
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.warning("Please enter a task title!")
-            with col_cancel:
-                if st.button("❌ Cancel", use_container_width=True):
+        col_save, col_cancel, _ = st.columns([1, 1, 4])
+        with col_save:
+            if st.button("💾 Save Task", type="primary", use_container_width=True):
+                if task_title:
+                    time_str = task_time.strftime("%H:%M") if task_time else None
+                    db.add_task(
+                        title=task_title.strip(),
+                        due_date=task_date.isoformat(),
+                        category_id=category,
+                        assigned_to=assigned,
+                        due_time=time_str,
+                        description=description,
+                        recurrence=recurrence,
+                        priority=priority,
+                    )
                     st.session_state.show_add_task = False
+                    st.cache_data.clear()
+                    st.toast("Task added!")
                     st.rerun()
+                else:
+                    st.warning("Please enter a task title!")
+        with col_cancel:
+            if st.button("❌ Cancel", use_container_width=True):
+                st.session_state.show_add_task = False
+                st.rerun()
 
-            st.markdown("---")
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("---")
 
     # Weekly calendar grid
     week_start = st.session_state.current_week_start
@@ -438,7 +511,7 @@ with tab_calendar:
             day_tasks = tasks_by_date.get(d, [])
 
             if not day_tasks:
-                st.markdown('<div class="empty-day">No tasks</div>', unsafe_allow_html=True)
+                st.markdown('<div class="empty-day"><div class="empty-day-icon">🌙</div>Nothing planned</div>', unsafe_allow_html=True)
             else:
                 for t in day_tasks:
                     completed_class = "completed" if t['is_completed'] else ""
@@ -493,11 +566,14 @@ with tab_calendar:
                         if st.button(btn_label, key=f"toggle_{t['id']}", help=btn_help):
                             db.toggle_task_complete(t['id'])
                             st.cache_data.clear()
+                            completion_status = "completed" if not t['is_completed'] else "reopened"
+                            st.toast(f"Task {completion_status}!")
                             st.rerun()
                     with bcol2:
                         if st.button("🗑️", key=f"del_{t['id']}", help="Delete task"):
                             db.delete_task(t['id'])
                             st.cache_data.clear()
+                            st.toast("Task deleted")
                             st.rerun()
 
 # ===========================================================================
@@ -505,7 +581,7 @@ with tab_calendar:
 # ===========================================================================
 with tab_balance:
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #1e293b, #0f3460); border-radius: 12px;
+    <div style="background: linear-gradient(135deg, #222640, #0f3460); border-radius: 12px;
                 padding: 1rem 1.5rem; margin-bottom: 1rem; border: 1px solid #334155;">
         <h3 style="margin:0; color:#38bdf8 !important;">⚖️ Balance Board</h3>
         <p style="margin:0.3rem 0 0 0; color:#94a3b8 !important; font-size:0.9rem;">
@@ -559,7 +635,7 @@ with tab_balance:
                 fairness_msg = "One person has quite a bit more on their plate. A good chance to redistribute!"
 
             st.markdown(f"""
-            <div style="background:#1e293b; border-radius:10px; padding:0.8rem 1.2rem;
+            <div style="background:#222640; border-radius:10px; padding:0.8rem 1.2rem;
                         margin:1rem 0; border: 1px solid #334155;
                         display:flex; align-items:center; gap:0.8rem;">
                 <span style="font-size:1.5rem;">{fairness_emoji}</span>
@@ -600,9 +676,8 @@ with tab_balance:
         # --- Unassigned tasks callout ---
         if equity['unassigned'] > 0:
             st.markdown(f"""
-            <div style="background:#1e293b; border-radius:10px; padding:0.8rem 1.2rem;
-                        margin:1rem 0; border-left: 4px solid #f59e0b; border: 1px solid #334155;
-                        border-left: 4px solid #f59e0b;">
+            <div style="background:#222640; border-radius:10px; padding:0.8rem 1.2rem;
+                        margin:1rem 0; border-left: 4px solid #f59e0b; border: 1px solid #334155;">
                 <strong style="color:#fbbf24 !important;">📋 {equity['unassigned']} unassigned task{'s' if equity['unassigned'] != 1 else ''}</strong>
                 <span style="color:#94a3b8 !important;"> in this period — grab some to help balance the load!</span>
             </div>
