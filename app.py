@@ -226,6 +226,9 @@ if "show_add_task" not in st.session_state:
 if "selected_date" not in st.session_state:
     st.session_state.selected_date = date.today()
 
+if "editing_task_id" not in st.session_state:
+    st.session_state.editing_task_id = None
+
 # ---------------------------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------------------------
@@ -561,7 +564,7 @@ with tab_calendar:
 
                     btn_label = "✅" if not t['is_completed'] else "↩️"
                     btn_help = "Mark complete" if not t['is_completed'] else "Mark incomplete"
-                    bcol1, bcol2 = st.columns(2)
+                    bcol1, bcol2, bcol3 = st.columns(3)
                     with bcol1:
                         if st.button(btn_label, key=f"toggle_{t['id']}", help=btn_help):
                             db.toggle_task_complete(t['id'])
@@ -570,6 +573,10 @@ with tab_calendar:
                             st.toast(f"Task {completion_status}!")
                             st.rerun()
                     with bcol2:
+                        if st.button("✏️", key=f"edit_{t['id']}", help="Edit task"):
+                            st.session_state.editing_task_id = t['id']
+                            st.rerun()
+                    with bcol3:
                         if t.get('recurrence'):
                             dc1, dc2 = st.columns(2)
                             with dc1:
@@ -589,6 +596,102 @@ with tab_calendar:
                                 db.delete_task(t['id'])
                                 st.cache_data.clear()
                                 st.toast("Task deleted")
+                                st.rerun()
+
+                    # --- Inline edit form ---
+                    if st.session_state.editing_task_id == t['id']:
+                        st.markdown("---")
+                        people = load_people()
+                        categories = load_categories()
+
+                        ed_title = st.text_input("Title", value=t['title'], key=f"ed_title_{t['id']}")
+
+                        ed_c1, ed_c2 = st.columns(2)
+                        with ed_c1:
+                            try:
+                                current_date = date.fromisoformat(t['due_date'])
+                            except (ValueError, TypeError):
+                                current_date = date.today()
+                            ed_date = st.date_input("Due Date", value=current_date, key=f"ed_date_{t['id']}")
+                        with ed_c2:
+                            current_time = None
+                            if t.get('due_time'):
+                                try:
+                                    current_time = datetime.strptime(t['due_time'], "%H:%M").time()
+                                except ValueError:
+                                    current_time = None
+                            ed_use_time = st.checkbox("Set time?", value=current_time is not None, key=f"ed_usetime_{t['id']}")
+                            ed_time = None
+                            if ed_use_time:
+                                ed_time = st.time_input("Time", value=current_time or time(9, 0), key=f"ed_time_{t['id']}")
+
+                        ed_c3, ed_c4 = st.columns(2)
+                        with ed_c3:
+                            person_opts = {}
+                            for p in people:
+                                label = "%s %s" % (p['avatar'], p['name'])
+                                person_opts[p['id']] = label
+                            person_opts[None] = "Unassigned"
+                            person_keys = list(person_opts.keys())
+                            cur_p_idx = 0
+                            if t.get('assigned_to') in person_keys:
+                                cur_p_idx = person_keys.index(t['assigned_to'])
+                            ed_assigned = st.selectbox("Assign to", options=person_keys,
+                                                        index=cur_p_idx,
+                                                        format_func=lambda x: person_opts[x],
+                                                        key=f"ed_person_{t['id']}")
+                        with ed_c4:
+                            cat_opts = {}
+                            for c in categories:
+                                label = "%s %s" % (c['icon'], c['name'])
+                                cat_opts[c['id']] = label
+                            cat_opts[None] = "No Category"
+                            cat_keys = list(cat_opts.keys())
+                            cur_c_idx = 0
+                            if t.get('category_id') in cat_keys:
+                                cur_c_idx = cat_keys.index(t['category_id'])
+                            ed_category = st.selectbox("Category", options=cat_keys,
+                                                        index=cur_c_idx,
+                                                        format_func=lambda x: cat_opts[x],
+                                                        key=f"ed_cat_{t['id']}")
+
+                        ed_c5, ed_c6 = st.columns(2)
+                        with ed_c5:
+                            pri_opts = ["low", "medium", "high"]
+                            cur_pri = pri_opts.index(t.get('priority', 'medium')) if t.get('priority') in pri_opts else 1
+                            ed_priority = st.selectbox("Priority", pri_opts, index=cur_pri, key=f"ed_pri_{t['id']}")
+                        with ed_c6:
+                            rec_opts = [None, "daily", "weekly", "biweekly", "monthly"]
+                            rec_labels = {None: "No repeat", "daily": "Daily", "weekly": "Weekly", "biweekly": "Every 2 weeks", "monthly": "Monthly"}
+                            cur_rec = rec_opts.index(t.get('recurrence')) if t.get('recurrence') in rec_opts else 0
+                            ed_recurrence = st.selectbox("Repeat", rec_opts, index=cur_rec,
+                                                          format_func=lambda x: rec_labels.get(x, str(x)),
+                                                          key=f"ed_rec_{t['id']}")
+
+                        ed_desc = st.text_input("Notes", value=t.get('description') or '', key=f"ed_desc_{t['id']}")
+
+                        sc1, sc2, _ = st.columns([1, 1, 2])
+                        with sc1:
+                            if st.button("Save", key=f"save_{t['id']}", type="primary", use_container_width=True):
+                                time_str = ed_time.strftime("%H:%M") if ed_time else None
+                                db.update_task(
+                                    t['id'],
+                                    title=ed_title.strip(),
+                                    due_date=ed_date.isoformat(),
+                                    due_time=time_str,
+                                    assigned_to=ed_assigned,
+                                    category_id=ed_category,
+                                    priority=ed_priority,
+                                    recurrence=ed_recurrence,
+                                    description=ed_desc,
+                                )
+                                st.session_state.editing_task_id = None
+                                st.cache_data.clear()
+                                st.toast("Task updated!")
+                                st.rerun()
+                        with sc2:
+                            if st.button("Cancel", key=f"cancel_{t['id']}", use_container_width=True):
+                                st.session_state.editing_task_id = None
                                 st.rerun()
 
 # ===========================================================================
