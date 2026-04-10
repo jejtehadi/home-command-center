@@ -229,6 +229,15 @@ if "selected_date" not in st.session_state:
 if "editing_task_id" not in st.session_state:
     st.session_state.editing_task_id = None
 
+if "calendar_view" not in st.session_state:
+    st.session_state.calendar_view = "week"
+
+if "current_month" not in st.session_state:
+    st.session_state.current_month = date.today().replace(day=1)
+
+if "selected_day" not in st.session_state:
+    st.session_state.selected_day = date.today()
+
 # ---------------------------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------------------------
@@ -242,6 +251,17 @@ def load_categories():
 
 def load_week_tasks(start_date):
     return db.get_tasks_for_week(start_date)
+
+def load_day_tasks(target_date):
+    return db.get_tasks_for_date(target_date)
+
+@st.cache_data(ttl=2)
+def load_month_tasks(year, month):
+    return db.get_tasks_for_month(year, month)
+
+@st.cache_data(ttl=2)
+def load_grocery_items():
+    return db.get_grocery_items()
 
 # ---------------------------------------------------------------------------
 # TOP BANNER
@@ -356,41 +376,112 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # TABS
 # ---------------------------------------------------------------------------
-tab_calendar, tab_balance = st.tabs(["📅 Weekly Calendar", "⚖️ Balance Board"])
+tab_calendar, tab_grocery, tab_balance = st.tabs(["📅 Calendar", "🛒 Grocery List", "⚖️ Balance Board"])
 
 # ===========================================================================
 # TAB 1: WEEKLY CALENDAR
 # ===========================================================================
 with tab_calendar:
-    # Week navigation
-    nav_cols = st.columns([1, 1, 3, 1, 1])
-    with nav_cols[0]:
-        if st.button("⬅️ Prev", use_container_width=True):
-            st.session_state.current_week_start -= timedelta(weeks=1)
+    # View mode selector
+    view_cols = st.columns([1, 1, 1, 3, 1])
+    with view_cols[0]:
+        if st.button("Day", use_container_width=True,
+                      type="primary" if st.session_state.calendar_view == "day" else "secondary"):
+            st.session_state.calendar_view = "day"
             st.rerun()
-    with nav_cols[1]:
-        if st.button("📍 Today", use_container_width=True):
-            st.session_state.current_week_start = today - timedelta(days=today.weekday())
+    with view_cols[1]:
+        if st.button("Week", use_container_width=True,
+                      type="primary" if st.session_state.calendar_view == "week" else "secondary"):
+            st.session_state.calendar_view = "week"
             st.rerun()
-    with nav_cols[2]:
-        ws = st.session_state.current_week_start
-        we = ws + timedelta(days=6)
-        st.markdown(
-            f"<div style='text-align:center; font-size:1.2rem; font-weight:600; padding-top:0.3rem; color:#f1f5f9 !important;'>"
-            f"{ws.strftime('%b %d')} — {we.strftime('%b %d, %Y')}</div>",
-            unsafe_allow_html=True
-        )
-    with nav_cols[3]:
-        if st.button("Next ➡️", use_container_width=True):
-            st.session_state.current_week_start += timedelta(weeks=1)
+    with view_cols[2]:
+        if st.button("Month", use_container_width=True,
+                      type="primary" if st.session_state.calendar_view == "month" else "secondary"):
+            st.session_state.calendar_view = "month"
             st.rerun()
-    with nav_cols[4]:
+    with view_cols[3]:
+        pass
+    with view_cols[4]:
         if st.button("➕ Add Task", use_container_width=True, type="primary"):
             st.session_state.show_add_task = not st.session_state.show_add_task
             st.rerun()
 
-    # Today's focus section
-    week_start = st.session_state.current_week_start
+    # --- Navigation for each view ---
+    if st.session_state.calendar_view == "week":
+        nav_cols = st.columns([1, 1, 3, 1])
+        with nav_cols[0]:
+            if st.button("⬅️ Prev", use_container_width=True, key="prev_week"):
+                st.session_state.current_week_start -= timedelta(weeks=1)
+                st.rerun()
+        with nav_cols[1]:
+            if st.button("📍 Today", use_container_width=True, key="today_week"):
+                st.session_state.current_week_start = today - timedelta(days=today.weekday())
+                st.rerun()
+        with nav_cols[2]:
+            ws = st.session_state.current_week_start
+            we = ws + timedelta(days=6)
+            st.markdown(
+                f"<div style='text-align:center; font-size:1.2rem; font-weight:600; padding-top:0.3rem; color:#f1f5f9 !important;'>"
+                f"{ws.strftime('%b %d')} — {we.strftime('%b %d, %Y')}</div>",
+                unsafe_allow_html=True
+            )
+        with nav_cols[3]:
+            if st.button("Next ➡️", use_container_width=True, key="next_week"):
+                st.session_state.current_week_start += timedelta(weeks=1)
+                st.rerun()
+
+    elif st.session_state.calendar_view == "day":
+        nav_cols = st.columns([1, 1, 3, 1])
+        with nav_cols[0]:
+            if st.button("⬅️ Prev", use_container_width=True, key="prev_day"):
+                st.session_state.selected_day -= timedelta(days=1)
+                st.rerun()
+        with nav_cols[1]:
+            if st.button("📍 Today", use_container_width=True, key="today_day"):
+                st.session_state.selected_day = today
+                st.rerun()
+        with nav_cols[2]:
+            sd = st.session_state.selected_day
+            st.markdown(
+                f"<div style='text-align:center; font-size:1.2rem; font-weight:600; padding-top:0.3rem; color:#f1f5f9 !important;'>"
+                f"{sd.strftime('%A, %B %d, %Y')}</div>",
+                unsafe_allow_html=True
+            )
+        with nav_cols[3]:
+            if st.button("Next ➡️", use_container_width=True, key="next_day"):
+                st.session_state.selected_day += timedelta(days=1)
+                st.rerun()
+
+    elif st.session_state.calendar_view == "month":
+        nav_cols = st.columns([1, 1, 3, 1])
+        with nav_cols[0]:
+            if st.button("⬅️ Prev", use_container_width=True, key="prev_month"):
+                cm = st.session_state.current_month
+                st.session_state.current_month = (cm.replace(day=1) - timedelta(days=1)).replace(day=1)
+                st.rerun()
+        with nav_cols[1]:
+            if st.button("📍 Today", use_container_width=True, key="today_month"):
+                st.session_state.current_month = today.replace(day=1)
+                st.rerun()
+        with nav_cols[2]:
+            cm = st.session_state.current_month
+            st.markdown(
+                f"<div style='text-align:center; font-size:1.2rem; font-weight:600; padding-top:0.3rem; color:#f1f5f9 !important;'>"
+                f"{cm.strftime('%B %Y')}</div>",
+                unsafe_allow_html=True
+            )
+        with nav_cols[3]:
+            if st.button("Next ➡️", use_container_width=True, key="next_month"):
+                cm = st.session_state.current_month
+                next_m = cm.replace(day=28) + timedelta(days=4)
+                st.session_state.current_month = next_m.replace(day=1)
+                st.rerun()
+
+    # ===== WEEK VIEW =====
+    if st.session_state.calendar_view == "week":
+
+        # Today's focus section
+        week_start = st.session_state.current_week_start
     today_tasks = [t for t in load_week_tasks(week_start) if date.fromisoformat(t['due_date']) == today]
     todays_count = len([t for t in today_tasks if not t['is_completed']])
 
@@ -694,8 +785,260 @@ with tab_calendar:
                                 st.session_state.editing_task_id = None
                                 st.rerun()
 
+    # ===== DAY VIEW =====
+    if st.session_state.calendar_view == "day":
+        sd = st.session_state.selected_day
+        day_tasks = load_day_tasks(sd)
+
+        if not day_tasks:
+            st.markdown("""
+            <div style="text-align:center; padding:3rem; color:#94a3b8;">
+                <div style="font-size:3rem;">\U0001f31f</div>
+                <h3>Nothing planned for this day</h3>
+                <p>Click \u2795 Add Task to schedule something</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            for t in day_tasks:
+                completed_class = "completed" if t['is_completed'] else ""
+                priority_class = "priority-%s" % t['priority']
+                border_color = t.get('category_color') or t.get('person_color') or '#475569'
+
+                person_html = ""
+                if t.get('person_name'):
+                    person_html = (
+                        "<span class='person-badge' style='background:%s25; "
+                        "color:%s !important'>%s %s</span>"
+                    ) % (t['person_color'], t['person_color'], t['person_avatar'], t['person_name'])
+
+                cat_html = ""
+                if t.get('category_name'):
+                    cat_html = (
+                        "<span class='cat-tag' style='background:%s25; "
+                        "color:%s !important'>%s %s</span>"
+                    ) % (t['category_color'], t['category_color'], t['category_icon'], t['category_name'])
+
+                time_html = ""
+                if t.get('due_time'):
+                    try:
+                        t_obj = datetime.strptime(t['due_time'], "%H:%M")
+                        time_html = "<span style='color:#94a3b8 !important'>\U0001f550 %s</span>" % t_obj.strftime('%I:%M %p')
+                    except ValueError:
+                        time_html = "<span style='color:#94a3b8 !important'>\U0001f550 %s</span>" % t['due_time']
+
+                desc_html = ""
+                if t.get('description'):
+                    desc_html = "<div style='color:#94a3b8; font-size:0.85rem; margin-top:0.3rem;'>%s</div>" % t['description']
+
+                st.markdown("""
+                <div class="task-card %s %s" style="border-left-color: %s;">
+                    <div class="task-title">%s</div>
+                    <div class="task-meta">%s %s</div>
+                    <div class="task-meta" style="margin-top:0.2rem;">%s</div>
+                    %s
+                </div>
+                """ % (completed_class, priority_class, border_color, t['title'],
+                       person_html, cat_html, time_html, desc_html), unsafe_allow_html=True)
+
+                btn_label = "\u2705" if not t['is_completed'] else "\u21a9\ufe0f"
+                btn_help = "Mark complete" if not t['is_completed'] else "Mark incomplete"
+                dc1, dc2, dc3 = st.columns(3)
+                with dc1:
+                    if st.button(btn_label, key="dtoggle_%s" % t['id'], help=btn_help):
+                        db.toggle_task_complete(t['id'])
+                        st.cache_data.clear()
+                        st.toast("Task updated!")
+                        st.rerun()
+                with dc2:
+                    if st.button("\u270f\ufe0f", key="dedit_%s" % t['id'], help="Edit task"):
+                        st.session_state.editing_task_id = t['id']
+                        st.rerun()
+                with dc3:
+                    if st.button("\U0001f5d1\ufe0f", key="ddel_%s" % t['id'], help="Delete task"):
+                        db.delete_task(t['id'])
+                        st.cache_data.clear()
+                        st.toast("Task deleted")
+                        st.rerun()
+
+    # ===== MONTH VIEW =====
+    if st.session_state.calendar_view == "month":
+        import calendar as cal_mod
+        cm = st.session_state.current_month
+        month_tasks = load_month_tasks(cm.year, cm.month)
+
+        # Group tasks by date
+        tasks_by_day = {}
+        for t in month_tasks:
+            d = date.fromisoformat(t['due_date'])
+            if d not in tasks_by_day:
+                tasks_by_day[d] = []
+            tasks_by_day[d].append(t)
+
+        # Calendar grid header
+        st.markdown("""
+        <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; margin-bottom:4px;">
+            <div style="text-align:center; font-weight:600; color:#94a3b8; padding:0.3rem;">Mon</div>
+            <div style="text-align:center; font-weight:600; color:#94a3b8; padding:0.3rem;">Tue</div>
+            <div style="text-align:center; font-weight:600; color:#94a3b8; padding:0.3rem;">Wed</div>
+            <div style="text-align:center; font-weight:600; color:#94a3b8; padding:0.3rem;">Thu</div>
+            <div style="text-align:center; font-weight:600; color:#94a3b8; padding:0.3rem;">Fri</div>
+            <div style="text-align:center; font-weight:600; color:#94a3b8; padding:0.3rem;">Sat</div>
+            <div style="text-align:center; font-weight:600; color:#94a3b8; padding:0.3rem;">Sun</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Build weeks
+        month_cal = cal_mod.monthcalendar(cm.year, cm.month)
+        for week_row in month_cal:
+            cols = st.columns(7)
+            for i, day_num in enumerate(week_row):
+                with cols[i]:
+                    if day_num == 0:
+                        st.markdown("<div style='min-height:80px;'></div>", unsafe_allow_html=True)
+                    else:
+                        d = date(cm.year, cm.month, day_num)
+                        day_tasks_list = tasks_by_day.get(d, [])
+                        total = len(day_tasks_list)
+                        done = sum(1 for t in day_tasks_list if t.get('is_completed'))
+
+                        is_today = d == today
+                        bg = "#1e3a5f" if is_today else "#222640"
+                        border = "2px solid #4A90D9" if is_today else "1px solid #334155"
+
+                        task_dots = ""
+                        for t in day_tasks_list[:4]:
+                            color = t.get('person_color') or t.get('category_color') or '#94a3b8'
+                            opacity = "0.4" if t.get('is_completed') else "1"
+                            task_dots += "<div style='width:8px;height:8px;border-radius:50%%;background:%s;opacity:%s;display:inline-block;margin:1px;'></div>" % (color, opacity)
+                        if total > 4:
+                            task_dots += "<span style='color:#94a3b8;font-size:0.7rem;'>+%d</span>" % (total - 4)
+
+                        count_html = ""
+                        if total > 0:
+                            count_html = "<div style='font-size:0.7rem;color:#94a3b8;'>%d/%d</div>" % (done, total)
+
+                        st.markdown("""
+                        <div style="background:%s; border:%s; border-radius:8px; padding:0.4rem; min-height:80px; cursor:pointer;">
+                            <div style="font-weight:600; font-size:0.9rem; color:%s;">%d</div>
+                            <div style="margin-top:0.2rem;">%s</div>
+                            %s
+                        </div>
+                        """ % (bg, border, "#4A90D9" if is_today else "#cbd5e1", day_num, task_dots, count_html), unsafe_allow_html=True)
+
+                        if st.button("View", key="month_day_%d" % day_num, use_container_width=True):
+                            st.session_state.selected_day = d
+                            st.session_state.calendar_view = "day"
+                            st.rerun()
+
+
 # ===========================================================================
-# TAB 2: BALANCE BOARD
+# TAB 2: GROCERY LIST
+# ===========================================================================
+with tab_grocery:
+    st.markdown('''
+    <div style="background: linear-gradient(135deg, #222640, #1a3a2a); border-radius: 12px;
+                padding: 1rem 1.5rem; margin-bottom: 1rem; border: 1px solid #334155;">
+        <h2 style="margin:0; color:#e0e0e0 !important;">\U0001f6d2 Grocery List</h2>
+        <p style="margin:0.3rem 0 0; color:#94a3b8 !important;">Shared family shopping list</p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # Add item form
+    people = load_people()
+    gc1, gc2, gc3, gc4 = st.columns([3, 2, 2, 1])
+    with gc1:
+        grocery_name = st.text_input("Item", placeholder="e.g. Milk, Eggs, Bread...", key="grocery_name", label_visibility="collapsed")
+    with gc2:
+        grocery_categories = ["Produce", "Dairy", "Meat", "Bakery", "Frozen", "Pantry", "Beverages", "Snacks", "Household", "Other"]
+        grocery_cat = st.selectbox("Category", grocery_categories, key="grocery_cat", label_visibility="collapsed")
+    with gc3:
+        person_opts = {None: "Anyone"}
+        for p in people:
+            person_opts[p['id']] = "%s %s" % (p['avatar'], p['name'])
+        grocery_person = st.selectbox("Added by", options=list(person_opts.keys()),
+                                       format_func=lambda x: person_opts[x],
+                                       key="grocery_person", label_visibility="collapsed")
+    with gc4:
+        if st.button("\u2795 Add", use_container_width=True, type="primary", key="add_grocery"):
+            if grocery_name:
+                db.add_grocery_item(grocery_name.strip(), grocery_cat, grocery_person)
+                st.cache_data.clear()
+                st.toast("Added to list!")
+                st.rerun()
+
+    st.markdown("---")
+
+    # Display grocery items
+    items = load_grocery_items()
+
+    if not items:
+        st.markdown('''
+        <div style="text-align:center; padding:3rem; color:#94a3b8;">
+            <div style="font-size:3rem;">\U0001f6d2</div>
+            <h3>Your grocery list is empty</h3>
+            <p>Add items above to get started</p>
+        </div>
+        ''', unsafe_allow_html=True)
+    else:
+        # Group by category
+        from collections import OrderedDict
+        grouped = OrderedDict()
+        for item in items:
+            cat = item.get('category', 'General')
+            if cat not in grouped:
+                grouped[cat] = []
+            grouped[cat].append(item)
+
+        checked_count = sum(1 for item in items if item.get('is_checked'))
+        total_count = len(items)
+
+        if checked_count > 0:
+            clear_col1, clear_col2 = st.columns([3, 1])
+            with clear_col1:
+                st.markdown(
+                    "<span style='color:#94a3b8;'>%d of %d items checked</span>" % (checked_count, total_count),
+                    unsafe_allow_html=True
+                )
+            with clear_col2:
+                if st.button("\U0001f5d1 Clear checked", use_container_width=True, key="clear_grocery"):
+                    db.clear_checked_grocery()
+                    st.cache_data.clear()
+                    st.toast("Cleared checked items")
+                    st.rerun()
+
+        for cat_name, cat_items in grouped.items():
+            st.markdown("**%s**" % cat_name)
+            for item in cat_items:
+                ic1, ic2, ic3 = st.columns([1, 5, 1])
+                with ic1:
+                    checked = item.get('is_checked', False)
+                    if st.checkbox("", value=checked, key="gcheck_%s" % item['id'], label_visibility="collapsed"):
+                        if not checked:
+                            db.toggle_grocery_item(item['id'])
+                            st.cache_data.clear()
+                            st.rerun()
+                    else:
+                        if checked:
+                            db.toggle_grocery_item(item['id'])
+                            st.cache_data.clear()
+                            st.rerun()
+                with ic2:
+                    style = "text-decoration: line-through; color: #64748b;" if item.get('is_checked') else "color: #e0e0e0;"
+                    person_tag = ""
+                    if item.get('person_avatar'):
+                        person_tag = " <span style='color:#94a3b8;font-size:0.8rem;'>%s</span>" % item['person_avatar']
+                    st.markdown(
+                        "<span style='%s'>%s</span>%s" % (style, item['name'], person_tag),
+                        unsafe_allow_html=True
+                    )
+                with ic3:
+                    if st.button("\u2716", key="gdel_%s" % item['id'], help="Remove"):
+                        db.delete_grocery_item(item['id'])
+                        st.cache_data.clear()
+                        st.rerun()
+
+# ===========================================================================
+# TAB 3: BALANCE BOARD
 # ===========================================================================
 with tab_balance:
     st.markdown("""

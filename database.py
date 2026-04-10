@@ -435,5 +435,76 @@ def get_equity_stats(weeks_back=4):
         "period_end": end,
     }
 
+
+# --- CRUD: Grocery Items ---
+
+def get_grocery_items():
+    """Get all grocery items, unchecked first, then by created_at."""
+    supabase = get_supabase()
+    response = supabase.table("grocery_items").select("*").order("is_checked").order("created_at", desc=True).execute()
+    items = response.data if response.data else []
+
+    # Merge person names
+    if items:
+        people_response = supabase.table("people").select("id, name, avatar").execute()
+        people_map = {p["id"]: p for p in people_response.data} if people_response.data else {}
+        for item in items:
+            if item.get("added_by") and item["added_by"] in people_map:
+                person = people_map[item["added_by"]]
+                item["person_name"] = person["name"]
+                item["person_avatar"] = person["avatar"]
+            else:
+                item["person_name"] = None
+                item["person_avatar"] = None
+    return items
+
+def add_grocery_item(name, category="General", added_by=None):
+    """Add a grocery item."""
+    supabase = get_supabase()
+    supabase.table("grocery_items").insert({
+        "name": name,
+        "category": category,
+        "added_by": added_by,
+    }).execute()
+
+def toggle_grocery_item(item_id):
+    """Toggle a grocery item's checked status."""
+    supabase = get_supabase()
+    response = supabase.table("grocery_items").select("is_checked").eq("id", item_id).execute()
+    if response.data:
+        new_status = not response.data[0]["is_checked"]
+        supabase.table("grocery_items").update({"is_checked": new_status}).eq("id", item_id).execute()
+
+def delete_grocery_item(item_id):
+    """Delete a grocery item."""
+    supabase = get_supabase()
+    supabase.table("grocery_items").delete().eq("id", item_id).execute()
+
+def clear_checked_grocery():
+    """Delete all checked grocery items."""
+    supabase = get_supabase()
+    supabase.table("grocery_items").delete().eq("is_checked", True).execute()
+
+
+# --- Month view helper ---
+
+def get_tasks_for_month(year, month):
+    """Get all tasks for an entire month."""
+    import calendar
+    first_day = date(year, month, 1)
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
+
+    supabase = get_supabase()
+    response = supabase.table("tasks").select("*").gte("due_date", first_day.isoformat()).lte("due_date", last_day.isoformat()).order("due_date").order("due_time").order("priority", desc=True).execute()
+    tasks = response.data if response.data else []
+
+    people_response = supabase.table("people").select("id, name, color, avatar").execute()
+    people_map = {p["id"]: p for p in people_response.data} if people_response.data else {}
+
+    categories_response = supabase.table("categories").select("id, name, color, icon").execute()
+    categories_map = {c["id"]: c for c in categories_response.data} if categories_response.data else {}
+
+    return [_merge_task_with_relations(task, people_map, categories_map) for task in tasks]
+
 # Initialize on import
 init_db()
