@@ -139,6 +139,14 @@ def _merge_task_with_relations(task, people_map, categories_map):
         task["category_color"] = None
         task["category_icon"] = None
 
+    if task.get("completed_by") and task["completed_by"] in people_map:
+        completer = people_map[task["completed_by"]]
+        task["completer_name"] = completer["name"]
+        task["completer_avatar"] = completer["avatar"]
+    else:
+        task["completer_name"] = None
+        task["completer_avatar"] = None
+
     return task
 
 def get_tasks_for_week(start_date: date):
@@ -243,7 +251,7 @@ def _generate_recurring_tasks(parent_id, title, start_date, category_id,
 def update_task(task_id, **kwargs):
     """Update a task with given keyword arguments."""
     allowed = {'title', 'description', 'category_id', 'assigned_to', 'due_date',
-               'due_time', 'is_completed', 'priority', 'recurrence'}
+               'due_time', 'is_completed', 'priority', 'recurrence', 'completed_by'}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return
@@ -285,8 +293,8 @@ def delete_task(task_id, delete_future=False):
     else:
         supabase.table("tasks").delete().eq("id", task_id).execute()
 
-def toggle_task_complete(task_id):
-    """Toggle a task's completion status."""
+def toggle_task_complete(task_id, completed_by=None):
+    """Toggle a task's completion status. Optionally record who completed it."""
     supabase = get_supabase()
 
     # Fetch current task
@@ -296,10 +304,12 @@ def toggle_task_complete(task_id):
         new_status = not task["is_completed"]
         completed_at = datetime.now().isoformat() if new_status else None
 
-        supabase.table("tasks").update({
+        update_data = {
             "is_completed": new_status,
-            "completed_at": completed_at
-        }).eq("id", task_id).execute()
+            "completed_at": completed_at,
+            "completed_by": completed_by if new_status else None,
+        }
+        supabase.table("tasks").update(update_data).eq("id", task_id).execute()
 
 def get_stats(start_date: date, end_date: date):
     """Get completion stats for a date range."""

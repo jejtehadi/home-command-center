@@ -26,6 +26,12 @@ st.markdown("""
     .stApp { background-color: #1e1e32; color: #e0e0e0; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+
+    /* ---- Streamlit overrides for tighter layout ---- */
+    .block-container { padding-top: 1rem; padding-bottom: 0; max-width: 100%; }
+    .stTabs [data-baseweb="tab-list"] { gap: 0.5rem; }
+    .stButton > button { font-size: 0.8rem; padding: 0.25rem 0.5rem; min-height: 0; }
+    .stColumns { gap: 0.3rem !important; }
     
 
     /* Force all Streamlit text white */
@@ -609,85 +615,69 @@ with tab_calendar:
             else:
                 for t in day_tasks:
                     completed_class = "completed" if t['is_completed'] else ""
-                    priority_class = f"priority-{t['priority']}"
+                    priority_class = "priority-%s" % t['priority']
                     border_color = t.get('category_color') or t.get('person_color') or '#475569'
 
-                    person_html = ""
+                    # Compact card: title + key info only
+                    person_tag = ""
                     if t.get('person_name'):
-                        person_html = (
-                            f"<span class='person-badge' style='background:{t['person_color']}25; "
-                            f"color:{t['person_color']} !important'>{t['person_avatar']} {t['person_name']}</span>"
-                        )
+                        person_tag = "<span style='color:%s;font-size:0.75rem;'>%s</span>" % (t['person_color'], t['person_avatar'])
 
-                    cat_html = ""
-                    if t.get('category_name'):
-                        cat_html = (
-                            f"<span class='cat-tag' style='background:{t['category_color']}25; "
-                            f"color:{t['category_color']} !important'>{t['category_icon']} {t['category_name']}</span>"
-                        )
+                    completer_tag = ""
+                    if t.get('is_completed') and t.get('completer_name'):
+                        completer_tag = "<span style='font-size:0.7rem;color:#10B981;'> done by %s</span>" % t['completer_avatar']
 
-                    time_html = ""
+                    time_tag = ""
                     if t.get('due_time'):
                         try:
                             t_obj = datetime.strptime(t['due_time'], "%H:%M")
-                            time_html = f"<span style='color:#94a3b8 !important'>🕐 {t_obj.strftime('%I:%M %p')}</span>"
+                            time_tag = "<span style='color:#94a3b8;font-size:0.7rem;'>%s</span>" % t_obj.strftime('%I:%M%p').lower()
                         except ValueError:
-                            time_html = f"<span style='color:#94a3b8 !important'>🕐 {t['due_time']}</span>"
+                            pass
 
-                    rec_html = ""
-                    if t.get('recurrence'):
-                        rec_labels = {'daily': '🔄 Daily', 'weekly': '🔄 Weekly',
-                                      'biweekly': '🔄 Bi-weekly', 'monthly': '🔄 Monthly'}
-                        rec_html = f"<span class='recurrence-badge'>{rec_labels.get(t['recurrence'], '')}</span>"
-
-                    st.markdown(f"""
-                    <div class="task-card {completed_class} {priority_class}"
-                         style="border-left-color: {border_color};">
-                        <div class="task-title">{t['title']}</div>
-                        <div class="task-meta">
-                            {person_html} {cat_html}
-                        </div>
-                        <div class="task-meta" style="margin-top:0.2rem;">
-                            {time_html} {rec_html}
-                        </div>
+                    st.markdown("""
+                    <div class="task-card %s %s" style="border-left-color:%s; padding:0.4rem 0.5rem; margin-bottom:0.3rem;">
+                        <div style="font-size:0.82rem; font-weight:600; line-height:1.2;">%s %s%s</div>
+                        <div style="font-size:0.7rem; margin-top:0.15rem;">%s</div>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """ % (completed_class, priority_class, border_color,
+                           t['title'], person_tag, completer_tag, time_tag), unsafe_allow_html=True)
 
-                    btn_label = "✅" if not t['is_completed'] else "↩️"
-                    btn_help = "Mark complete" if not t['is_completed'] else "Mark incomplete"
-                    bcol1, bcol2, bcol3 = st.columns(3)
-                    with bcol1:
-                        if st.button(btn_label, key=f"toggle_{t['id']}", help=btn_help):
-                            db.toggle_task_complete(t['id'])
-                            st.cache_data.clear()
-                            completion_status = "completed" if not t['is_completed'] else "reopened"
-                            st.toast(f"Task {completion_status}!")
-                            st.rerun()
-                    with bcol2:
-                        if st.button("✏️", key=f"edit_{t['id']}", help="Edit task"):
-                            st.session_state.editing_task_id = t['id']
-                            st.rerun()
-                    with bcol3:
-                        if t.get('recurrence'):
-                            dc1, dc2 = st.columns(2)
-                            with dc1:
-                                if st.button("🗑️", key=f"del_{t['id']}", help="Delete this one"):
-                                    db.delete_task(t['id'])
-                                    st.cache_data.clear()
-                                    st.toast("Task deleted")
-                                    st.rerun()
-                            with dc2:
-                                if st.button("🗑️🔄", key=f"del_all_{t['id']}", help="Delete all future"):
-                                    db.delete_task(t['id'], delete_future=True)
-                                    st.cache_data.clear()
-                                    st.toast("All future recurring tasks deleted")
-                                    st.rerun()
-                        else:
-                            if st.button("🗑️", key=f"del_{t['id']}", help="Delete task"):
-                                db.delete_task(t['id'])
+                    # Compact action row: complete (with person picker), edit, delete
+                    if not t['is_completed']:
+                        people = load_people()
+                        person_opts = {}
+                        for p in people:
+                            person_opts[p['id']] = "%s %s" % (p['avatar'], p['name'])
+                        ac1, ac2, ac3 = st.columns([2, 1, 1])
+                        with ac1:
+                            completer_id = st.selectbox("Done by", options=list(person_opts.keys()),
+                                                         format_func=lambda x: person_opts[x],
+                                                         key="who_%s" % t['id'], label_visibility="collapsed")
+                        with ac2:
+                            if st.button("Done", key="toggle_%s" % t['id'], use_container_width=True):
+                                db.toggle_task_complete(t['id'], completed_by=completer_id)
                                 st.cache_data.clear()
-                                st.toast("Task deleted")
+                                st.toast("Task completed!")
                                 st.rerun()
+                        with ac3:
+                            if st.button("...", key="more_%s" % t['id'], help="Edit / Delete", use_container_width=True):
+                                st.session_state.editing_task_id = t['id']
+                                st.rerun()
+                    else:
+                        ac1, ac2, ac3 = st.columns([2, 1, 1])
+                        with ac1:
+                            if st.button("Undo", key="toggle_%s" % t['id'], use_container_width=True):
+                                db.toggle_task_complete(t['id'])
+                                st.cache_data.clear()
+                                st.toast("Task reopened")
+                                st.rerun()
+                        with ac2:
+                            if st.button("...", key="more_%s" % t['id'], help="Edit / Delete", use_container_width=True):
+                                st.session_state.editing_task_id = t['id']
+                                st.rerun()
+                        with ac3:
+                            pass
 
                     # --- Inline edit form ---
                     if st.session_state.editing_task_id == t['id']:
@@ -760,6 +750,23 @@ with tab_calendar:
                                                           key=f"ed_rec_{t['id']}")
 
                         ed_desc = st.text_input("Notes", value=t.get('description') or '', key=f"ed_desc_{t['id']}")
+
+                        del_cols = st.columns([1, 1, 2])
+                        with del_cols[0]:
+                            if st.button("Delete this", key="edel_%s" % t['id'], use_container_width=True):
+                                db.delete_task(t['id'])
+                                st.session_state.editing_task_id = None
+                                st.cache_data.clear()
+                                st.toast("Task deleted")
+                                st.rerun()
+                        with del_cols[1]:
+                            if t.get('recurrence'):
+                                if st.button("Delete all future", key="edel_all_%s" % t['id'], use_container_width=True):
+                                    db.delete_task(t['id'], delete_future=True)
+                                    st.session_state.editing_task_id = None
+                                    st.cache_data.clear()
+                                    st.toast("All future deleted")
+                                    st.rerun()
 
                         sc1, sc2, _ = st.columns([1, 1, 2])
                         with sc1:
